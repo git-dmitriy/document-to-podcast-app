@@ -1,0 +1,16 @@
+# Analyzer and linter configuration for Document to Podcast.
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+
+linter:
+  rules:
+    prefer_single_quotes: true
+    require_trailing_commas: true
+    unawaited_futures: true
+    avoid_print: true
