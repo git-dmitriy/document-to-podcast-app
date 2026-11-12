@@ -5,6 +5,7 @@ import 'package:document_to_podcast/domain/tts_engine.dart';
 
 final class FakeTtsEngine implements TtsEngine {
   final List<String> spoken = [];
+  final List<AppLanguage> languages = [];
   final List<double> rates = [];
   final List<String> resumed = [];
   final available = <AppLanguage, bool>{
@@ -42,6 +43,7 @@ final class FakeTtsEngine implements TtsEngine {
     lastText = text;
     lastLanguage = language;
     spoken.add(text);
+    languages.add(language);
     return _wait();
   }
 

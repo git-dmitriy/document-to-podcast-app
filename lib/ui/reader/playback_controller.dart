@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 
 import '../../domain/app_language.dart';
 import '../../domain/document.dart';
+import '../../domain/language_detector.dart';
 import '../../domain/markdown_speech_compiler.dart';
+import '../../domain/playback_settings.dart';
 import '../../domain/speech_segment.dart';
 import '../../domain/tts_engine.dart';
 
@@ -15,21 +17,30 @@ final class PlaybackController extends ChangeNotifier {
   PlaybackController({
     required this._engine,
     MarkdownSpeechCompiler? compiler,
-  }) : _compiler = compiler ?? const MarkdownSpeechCompiler();
+    AppLanguage fallbackLanguage = AppLanguage.en,
+    double? rate,
+  }) : _fallback = fallbackLanguage,
+       _rate = clampPlaybackRate(rate ?? PlaybackSettings.defaultRate),
+       _compiler =
+           compiler ??
+           MarkdownSpeechCompiler(
+             languages: LanguageDetector(fallback: fallbackLanguage),
+           );
 
-  static const minRate = 0.25;
-  static const maxRate = 1.0;
-  static const defaultRate = 0.5;
+  static const minRate = PlaybackSettings.minRate;
+  static const maxRate = PlaybackSettings.maxRate;
+  static const defaultRate = PlaybackSettings.defaultRate;
 
   final TtsEngine _engine;
-  final MarkdownSpeechCompiler _compiler;
+  AppLanguage _fallback;
+  MarkdownSpeechCompiler _compiler;
   final Map<AppLanguage, bool> _availability = {};
   final Set<AppLanguage> _unavailable = {};
 
   PlaybackStatus _status = PlaybackStatus.idle;
   String? _documentId;
   String? _error;
-  double _rate = defaultRate;
+  double _rate;
   List<SpeechSegment> _segments = const [];
   var _index = 0;
   var _generation = 0;
@@ -126,9 +137,17 @@ final class PlaybackController extends ChangeNotifier {
     }
   }
 
+  void setFallbackLanguage(AppLanguage language) {
+    if (_disposed || _fallback == language) return;
+    _fallback = language;
+    _compiler = MarkdownSpeechCompiler(
+      languages: LanguageDetector(fallback: language),
+    );
+  }
+
   Future<void> setRate(double rate) async {
     if (_disposed || rate.isNaN) return;
-    final next = rate.clamp(minRate, maxRate).toDouble();
+    final next = clampPlaybackRate(rate);
     if (next == _rate) return;
     _rate = next;
     _notify();

@@ -3,26 +3,37 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../app/app_spacing.dart';
+import '../../app/app_surface.dart';
 import '../../app/window_size.dart';
 import '../../domain/document.dart';
 import '../import/import_screen.dart';
 import '../reader/playback_controller.dart';
 import '../reader/reader_screen.dart';
+import '../settings/settings_controller.dart';
+import '../settings/settings_screen.dart';
 import 'delete_document.dart';
 import 'document_list.dart';
 import 'library_controller.dart';
+import 'system_speech_banner.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
     required this.controller,
     required this.playback,
+    required this.settings,
+    required this.surface,
     super.key,
   });
 
   static const emptyImportKey = Key('empty-import');
+  static const nativeEmptyBody =
+      'Import a Markdown file or paste text to start a reading library.';
+  static const webEmptyBody = 'Paste Markdown to start a reading library.';
 
   final LibraryController controller;
   final PlaybackController playback;
+  final SettingsController settings;
+  final AppSurface surface;
 
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
@@ -43,6 +54,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
         title: const Text('Library'),
         actions: [
           IconButton(
+            tooltip: 'Settings',
+            onPressed: _openSettings,
+            icon: const Icon(Icons.settings_outlined),
+          ),
+          IconButton(
             tooltip: 'Import Markdown',
             onPressed: _openImport,
             icon: const Icon(Icons.note_add_outlined),
@@ -50,30 +66,40 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ],
       ),
       body: SafeArea(
-        child: ListenableBuilder(
-          listenable: widget.controller,
-          builder: (context, _) {
-            final state = widget.controller.state;
-            final twoPanes = WindowSize.fromWidth(
-              MediaQuery.sizeOf(context).width,
-            ).showsTwoPanes;
-            final list = _LibraryBody(
-              state: state,
-              spacing: spacing,
-              onImport: _openImport,
-              onRetry: _retry,
-              onOpen: (document) => _openDocument(document, twoPanes: twoPanes),
-              onDelete: _delete,
-            );
-            if (!twoPanes) return list;
-            return Row(
-              children: [
-                SizedBox(width: 360, child: list),
-                const VerticalDivider(width: 1),
-                Expanded(child: _detail(state)),
-              ],
-            );
-          },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.surface == AppSurface.web) const SystemSpeechBanner(),
+            Expanded(
+              child: ListenableBuilder(
+                listenable: widget.controller,
+                builder: (context, _) {
+                  final state = widget.controller.state;
+                  final twoPanes = WindowSize.fromWidth(
+                    MediaQuery.sizeOf(context).width,
+                  ).showsTwoPanes;
+                  final list = _LibraryBody(
+                    state: state,
+                    spacing: spacing,
+                    surface: widget.surface,
+                    onImport: _openImport,
+                    onRetry: _retry,
+                    onOpen: (document) =>
+                        _openDocument(document, twoPanes: twoPanes),
+                    onDelete: _delete,
+                  );
+                  if (!twoPanes) return list;
+                  return Row(
+                    children: [
+                      SizedBox(width: 360, child: list),
+                      const VerticalDivider(width: 1),
+                      Expanded(child: _detail(state)),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -88,14 +114,32 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return ReaderPane(
       controller: widget.controller,
       playback: widget.playback,
+      settings: widget.settings,
       document: document,
+    );
+  }
+
+  void _openSettings() {
+    unawaited(
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => SettingsScreen(
+            settings: widget.settings,
+            playback: widget.playback,
+            surface: widget.surface,
+          ),
+        ),
+      ),
     );
   }
 
   Future<void> _openImport() async {
     final id = await Navigator.of(context).push<String>(
       MaterialPageRoute<String>(
-        builder: (context) => ImportScreen(controller: widget.controller),
+        builder: (context) => ImportScreen(
+          controller: widget.controller,
+          surface: widget.surface,
+        ),
       ),
     );
     if (!mounted || id == null) return;
@@ -115,6 +159,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           builder: (context) => ReaderScreen(
             controller: widget.controller,
             playback: widget.playback,
+            settings: widget.settings,
             documentId: document.id,
           ),
         ),
@@ -131,6 +176,7 @@ class _LibraryBody extends StatelessWidget {
   const _LibraryBody({
     required this.state,
     required this.spacing,
+    required this.surface,
     required this.onImport,
     required this.onRetry,
     required this.onOpen,
@@ -139,6 +185,7 @@ class _LibraryBody extends StatelessWidget {
 
   final LibraryState state;
   final AppSpacing spacing;
+  final AppSurface surface;
   final VoidCallback onImport;
   final Future<void> Function() onRetry;
   final ValueChanged<Document> onOpen;
@@ -165,8 +212,9 @@ class _LibraryBody extends StatelessWidget {
       return _MessagePane(
         spacing: spacing,
         title: 'No documents yet',
-        body:
-            'Import a Markdown file or paste text to start a reading library.',
+        body: surface == AppSurface.web
+            ? LibraryScreen.webEmptyBody
+            : LibraryScreen.nativeEmptyBody,
         action: FilledButton(
           key: LibraryScreen.emptyImportKey,
           onPressed: onImport,

@@ -1,20 +1,29 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/app_spacing.dart';
+import '../../app/app_surface.dart';
 import '../../data/document_store_exception.dart';
 import '../../data/markdown_file.dart';
 import '../../domain/document_title.dart';
 import '../library/library_controller.dart';
 
 class ImportScreen extends StatefulWidget {
-  const ImportScreen({required this.controller, super.key});
+  const ImportScreen({
+    required this.controller,
+    required this.surface,
+    super.key,
+  });
 
   static const titleFieldKey = Key('title-input');
   static const markdownFieldKey = Key('markdown-input');
   static const saveButtonKey = Key('save-document');
+  static const pasteHint =
+      'Paste Markdown into the field. Choosing a file is optional in the browser.';
 
   final LibraryController controller;
+  final AppSurface surface;
 
   @override
   State<ImportScreen> createState() => _ImportScreenState();
@@ -52,6 +61,35 @@ class _ImportScreenState extends State<ImportScreen> {
     final sourceName = _sourceName;
     final error = _error;
     final canSave = !_saving && _markdownController.text.trim().isNotEmpty;
+    final pasteFirst = widget.surface == AppSurface.web;
+    final fileButton = Align(
+      alignment: Alignment.centerLeft,
+      child: pasteFirst
+          ? TextButton.icon(
+              onPressed: _saving ? null : _pickFile,
+              icon: const Icon(Icons.upload_file),
+              label: const Text('Choose Markdown file'),
+            )
+          : OutlinedButton.icon(
+              onPressed: _saving ? null : _pickFile,
+              icon: const Icon(Icons.upload_file),
+              label: const Text('Choose Markdown file'),
+            ),
+    );
+    final markdownField = Expanded(
+      child: TextField(
+        key: ImportScreen.markdownFieldKey,
+        controller: _markdownController,
+        expands: true,
+        maxLines: null,
+        textAlignVertical: TextAlignVertical.top,
+        decoration: const InputDecoration(
+          labelText: 'Markdown',
+          alignLabelWithHint: true,
+          border: OutlineInputBorder(),
+        ),
+      ),
+    );
     return Scaffold(
       appBar: AppBar(
         title: const Text('Import'),
@@ -83,15 +121,17 @@ class _ImportScreenState extends State<ImportScreen> {
                     ),
                   ),
                   SizedBox(height: spacing.sectionGap),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      onPressed: _saving ? null : _pickFile,
-                      icon: const Icon(Icons.upload_file),
-                      label: const Text('Choose Markdown file'),
+                  if (pasteFirst) ...[
+                    Text(
+                      ImportScreen.pasteHint,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
-                  if (sourceName != null) ...[
+                    SizedBox(height: spacing.sectionGap),
+                  ] else
+                    fileButton,
+                  if (!pasteFirst && sourceName != null) ...[
                     SizedBox(height: spacing.sectionGap),
                     Text(
                       sourceName,
@@ -110,20 +150,20 @@ class _ImportScreenState extends State<ImportScreen> {
                     ),
                   ],
                   SizedBox(height: spacing.sectionGap),
-                  Expanded(
-                    child: TextField(
-                      key: ImportScreen.markdownFieldKey,
-                      controller: _markdownController,
-                      expands: true,
-                      maxLines: null,
-                      textAlignVertical: TextAlignVertical.top,
-                      decoration: const InputDecoration(
-                        labelText: 'Markdown',
-                        alignLabelWithHint: true,
-                        border: OutlineInputBorder(),
+                  markdownField,
+                  if (pasteFirst) ...[
+                    SizedBox(height: spacing.sectionGap),
+                    fileButton,
+                    if (sourceName != null) ...[
+                      SizedBox(height: spacing.sectionGap),
+                      Text(
+                        sourceName,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ),
+                    ],
+                  ],
                 ],
               ),
             ),
@@ -158,6 +198,11 @@ class _ImportScreenState extends State<ImportScreen> {
     } on DocumentStoreException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
+    } on PlatformException {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not read that file. Paste the Markdown instead.';
+      });
     }
   }
 

@@ -200,6 +200,29 @@ void main() {
       'System speech is not available on this device.',
     );
   });
+
+  test('uses the configured fallback when text has no letters', () async {
+    final engine = FakeTtsEngine();
+    final playback = PlaybackController(
+      engine: engine,
+      fallbackLanguage: AppLanguage.ru,
+    );
+    addTearDown(playback.dispose);
+
+    final first = playback.play(document('123'));
+    await pumpEventQueue();
+    expect(engine.languages, [AppLanguage.ru]);
+    engine.completeCurrent();
+    await first;
+
+    playback.setFallbackLanguage(AppLanguage.en);
+    final second = playback.play(document('456'));
+    await pumpEventQueue();
+    expect(engine.languages, [AppLanguage.ru, AppLanguage.en]);
+    engine.completeCurrent();
+    await second;
+    expect(playback.status, PlaybackStatus.idle);
+  });
 }
 
 extension on Document {

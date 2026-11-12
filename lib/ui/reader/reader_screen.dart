@@ -7,6 +7,7 @@ import '../../app/app_spacing.dart';
 import '../../domain/document.dart';
 import '../library/delete_document.dart';
 import '../library/library_controller.dart';
+import '../settings/settings_controller.dart';
 import 'playback_controller.dart';
 import 'player_bar.dart';
 
@@ -14,12 +15,14 @@ class ReaderScreen extends StatelessWidget {
   const ReaderScreen({
     required this.controller,
     required this.playback,
+    required this.settings,
     required this.documentId,
     super.key,
   });
 
   final LibraryController controller;
   final PlaybackController playback;
+  final SettingsController settings;
   final String documentId;
 
   @override
@@ -53,6 +56,7 @@ class ReaderScreen extends StatelessWidget {
                   body: ReaderBody(document: document),
                   bottomNavigationBar: PlayerBar(
                     playback: playback,
+                    settings: settings,
                     document: document,
                   ),
                 ),
@@ -73,12 +77,14 @@ class ReaderPane extends StatelessWidget {
   const ReaderPane({
     required this.controller,
     required this.playback,
+    required this.settings,
     required this.document,
     super.key,
   });
 
   final LibraryController controller;
   final PlaybackController playback;
+  final SettingsController settings;
   final Document document;
 
   @override
@@ -120,7 +126,7 @@ class ReaderPane extends StatelessWidget {
             ),
           ),
           Expanded(child: ReaderBody(document: document)),
-          PlayerBar(playback: playback, document: document),
+          PlayerBar(playback: playback, settings: settings, document: document),
         ],
       ),
     );

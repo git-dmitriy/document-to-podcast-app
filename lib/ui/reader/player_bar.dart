@@ -4,22 +4,30 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_spacing.dart';
 import '../../domain/document.dart';
+import '../settings/settings_controller.dart';
 import 'playback_controller.dart';
+import 'playback_speed_slider.dart';
 
 class PlayerBar extends StatelessWidget {
-  const PlayerBar({required this.playback, required this.document, super.key});
+  const PlayerBar({
+    required this.playback,
+    required this.settings,
+    required this.document,
+    super.key,
+  });
 
   final PlaybackController playback;
+  final SettingsController settings;
   final Document document;
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: playback,
+      listenable: Listenable.merge([playback, settings]),
       builder: (context, _) {
         final theme = Theme.of(context);
         final spacing = AppSpacing.of(context);
-        final errorMessage = playback.errorMessage;
+        final errorMessage = playback.errorMessage ?? settings.errorMessage;
         final playing = playback.status == PlaybackStatus.playing;
         return Material(
           color: theme.colorScheme.surfaceContainer,
@@ -60,13 +68,9 @@ class PlayerBar extends StatelessWidget {
                       ),
                       Text('Speed', style: theme.textTheme.labelLarge),
                       Expanded(
-                        child: Slider(
-                          value: playback.rate,
-                          min: PlaybackController.minRate,
-                          max: PlaybackController.maxRate,
-                          onChanged: (value) {
-                            unawaited(playback.setRate(value));
-                          },
+                        child: PlaybackSpeedSlider(
+                          playback: playback,
+                          settings: settings,
                         ),
                       ),
                     ],
