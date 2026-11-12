@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import 'app/app.dart';
+import 'data/document_store_opener.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const DocumentToPodcastApp());
+  final store = await openDocumentStore();
+  runApp(DocumentToPodcastApp(store: store));
 }
