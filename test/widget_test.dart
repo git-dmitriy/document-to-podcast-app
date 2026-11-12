@@ -5,6 +5,7 @@ import 'package:document_to_podcast/ui/library/library_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/fake_tts_engine.dart';
 import 'support/memory_document_store.dart';
 
 void main() {
@@ -29,6 +30,8 @@ void main() {
 
     expect(find.text('Body text'), findsOneWidget);
     expect(find.text('Hello'), findsWidgets);
+    expect(find.byTooltip('Play'), findsOneWidget);
+    expect(find.text('Speed'), findsOneWidget);
   });
 
   testWidgets('deletes a document after confirmation', (tester) async {
@@ -63,6 +66,28 @@ void main() {
 
     expect(find.text('Body text'), findsOneWidget);
     expect(find.byType(Scaffold), findsOneWidget);
+    expect(find.byTooltip('Play'), findsOneWidget);
+  });
+
+  testWidgets('play and pause use the injected speech engine', (tester) async {
+    final engine = FakeTtsEngine();
+    final store = MemoryDocumentStore(newId: () => 'doc-1');
+    await store.create(title: 'Hello', markdown: 'Body text');
+    await tester.pumpWidget(DocumentToPodcastApp(store: store, speech: engine));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Hello'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Play'));
+    await tester.pump();
+
+    expect(engine.spoken, ['Body text']);
+    expect(find.byTooltip('Pause'), findsOneWidget);
+
+    engine.completeCurrent();
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Play'), findsOneWidget);
+    expect(engine.stopCount, 0);
   });
 }
 

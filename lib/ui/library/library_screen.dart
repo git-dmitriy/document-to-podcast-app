@@ -6,17 +6,23 @@ import '../../app/app_spacing.dart';
 import '../../app/window_size.dart';
 import '../../domain/document.dart';
 import '../import/import_screen.dart';
+import '../reader/playback_controller.dart';
 import '../reader/reader_screen.dart';
 import 'delete_document.dart';
 import 'document_list.dart';
 import 'library_controller.dart';
 
 class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({required this.controller, super.key});
+  const LibraryScreen({
+    required this.controller,
+    required this.playback,
+    super.key,
+  });
 
   static const emptyImportKey = Key('empty-import');
 
   final LibraryController controller;
+  final PlaybackController playback;
 
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
@@ -79,7 +85,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     if (document == null) {
       return const Center(child: Text('Select a document to read.'));
     }
-    return ReaderPane(controller: widget.controller, document: document);
+    return ReaderPane(
+      controller: widget.controller,
+      playback: widget.playback,
+      document: document,
+    );
   }
 
   Future<void> _openImport() async {
@@ -104,6 +114,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         MaterialPageRoute<void>(
           builder: (context) => ReaderScreen(
             controller: widget.controller,
+            playback: widget.playback,
             documentId: document.id,
           ),
         ),
