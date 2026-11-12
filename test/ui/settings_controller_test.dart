@@ -11,13 +11,14 @@ void main() {
     final repository = MemorySettingsRepository();
     final controller = SettingsController(
       repository: repository,
-      initial: const PlaybackSettings(),
+      initial: const PlaybackSettings(engine: SpeechEngine.quality),
     );
     addTearDown(controller.dispose);
 
     await controller.setRate(0.1);
     await controller.setFallbackLanguage(AppLanguage.ru);
 
+    expect(controller.settings.engine, SpeechEngine.quality);
     expect(controller.settings.rate, PlaybackSettings.minRate);
     expect(controller.settings.fallbackLanguage, AppLanguage.ru);
     expect(repository.settings, controller.settings);

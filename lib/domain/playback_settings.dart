@@ -1,6 +1,6 @@
 import 'app_language.dart';
 
-enum SpeechEngine { system }
+enum SpeechEngine { system, quality }
 
 final class PlaybackSettings {
   const PlaybackSettings({
@@ -19,6 +19,7 @@ final class PlaybackSettings {
 
   PlaybackSettings copyWith({double? rate, AppLanguage? fallbackLanguage}) {
     return PlaybackSettings(
+      engine: engine,
       rate: clampPlaybackRate(rate ?? this.rate),
       fallbackLanguage: fallbackLanguage ?? this.fallbackLanguage,
     );

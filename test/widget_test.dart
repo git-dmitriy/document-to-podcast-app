@@ -3,15 +3,18 @@ import 'package:document_to_podcast/app/app_surface.dart';
 import 'package:document_to_podcast/data/memory_settings_repository.dart';
 import 'package:document_to_podcast/domain/app_language.dart';
 import 'package:document_to_podcast/domain/playback_settings.dart';
+import 'package:document_to_podcast/domain/voice_package.dart';
 import 'package:document_to_podcast/ui/import/import_screen.dart';
 import 'package:document_to_podcast/ui/library/delete_document.dart';
 import 'package:document_to_podcast/ui/library/library_screen.dart';
 import 'package:document_to_podcast/ui/library/system_speech_banner.dart';
+import 'package:document_to_podcast/ui/settings/quality_voices_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_tts_engine.dart';
 import 'support/memory_document_store.dart';
+import 'support/memory_model_downloader.dart';
 
 void main() {
   testWidgets('imports pasted Markdown and opens the reader', (tester) async {
@@ -150,6 +153,40 @@ void main() {
       find.text('System speech is the only engine in the browser.'),
       findsOneWidget,
     );
+    await tester.scrollUntilVisible(
+      find.text(QualityVoicesSection.webMessage),
+      200,
+    );
+    expect(find.text(QualityVoicesSection.webMessage), findsOneWidget);
+    expect(
+      find.byKey(QualityVoicesSection.downloadKey(VoiceId.irina)),
+      findsNothing,
+    );
+  });
+
+  testWidgets('downloads a quality voice from settings', (tester) async {
+    await _pumpLibrary(tester);
+
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(QualityVoicesSection.downloadKey(VoiceId.irina)),
+      200,
+    );
+    await tester.tap(
+      find.byKey(QualityVoicesSection.downloadKey(VoiceId.irina)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Installed'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(QualityVoicesSection.downloadKey(VoiceId.lessac)),
+      200,
+    );
+    expect(
+      find.byKey(QualityVoicesSection.downloadKey(VoiceId.lessac)),
+      findsOneWidget,
+    );
   });
 }
 
@@ -158,6 +195,7 @@ Future<void> _pumpLibrary(
   MemoryDocumentStore? store,
   FakeTtsEngine? speech,
   MemorySettingsRepository? settingsRepository,
+  MemoryModelDownloader? voices,
   PlaybackSettings initialSettings = const PlaybackSettings(),
   AppSurface? surface,
 }) async {
@@ -167,6 +205,7 @@ Future<void> _pumpLibrary(
       speech: speech,
       settingsRepository: settingsRepository ?? MemorySettingsRepository(),
       initialSettings: initialSettings,
+      voices: voices ?? MemoryModelDownloader(),
       surface: surface,
     ),
   );

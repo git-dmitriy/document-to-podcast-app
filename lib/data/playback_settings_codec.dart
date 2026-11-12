@@ -9,7 +9,7 @@ const playbackSettingsVersion = 1;
 String encodePlaybackSettings(PlaybackSettings settings) {
   return jsonEncode({
     'version': playbackSettingsVersion,
-    'engine': SpeechEngine.system.name,
+    'engine': settings.engine.name,
     'rate': settings.rate,
     'language': settings.fallbackLanguage.name,
   });
@@ -30,6 +30,7 @@ PlaybackSettings decodePlaybackSettings(String? source) {
         ? AppLanguage.byCode(languageRaw)
         : null;
     return PlaybackSettings(
+      engine: _engine(decoded['engine']),
       rate: _rate(decoded['rate']),
       fallbackLanguage: language ?? AppLanguage.en,
     );
@@ -41,4 +42,12 @@ PlaybackSettings decodePlaybackSettings(String? source) {
 double _rate(Object? value) {
   if (value is! num || value.isNaN) return PlaybackSettings.defaultRate;
   return clampPlaybackRate(value.toDouble());
+}
+
+SpeechEngine _engine(Object? value) {
+  if (value is! String) return SpeechEngine.system;
+  for (final engine in SpeechEngine.values) {
+    if (engine.name == value) return engine;
+  }
+  return SpeechEngine.system;
 }

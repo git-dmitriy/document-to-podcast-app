@@ -3,14 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../data/document_store.dart';
+import '../data/model_downloader.dart';
 import '../data/settings_repository.dart';
-import '../data/system_tts_engine.dart';
+import '../data/tts_engine_factory.dart';
 import '../domain/playback_settings.dart';
 import '../domain/tts_engine.dart';
 import '../ui/library/library_controller.dart';
 import '../ui/library/library_screen.dart';
 import '../ui/reader/playback_controller.dart';
 import '../ui/settings/settings_controller.dart';
+import '../ui/settings/voice_library_controller.dart';
 import 'app_spacing.dart';
 import 'app_surface.dart';
 import 'theme.dart';
@@ -20,7 +22,9 @@ class DocumentToPodcastApp extends StatefulWidget {
     required this.store,
     required this.settingsRepository,
     required this.initialSettings,
+    required this.voices,
     this.speech,
+    this.engines,
     this.surface,
     super.key,
   });
@@ -28,7 +32,9 @@ class DocumentToPodcastApp extends StatefulWidget {
   final DocumentStore store;
   final SettingsRepository settingsRepository;
   final PlaybackSettings initialSettings;
+  final ModelDownloader voices;
   final TtsEngine? speech;
+  final TtsEngineFactory? engines;
   final AppSurface? surface;
 
   @override
@@ -43,8 +49,13 @@ class _DocumentToPodcastAppState extends State<DocumentToPodcastApp> {
     repository: widget.settingsRepository,
     initial: widget.initialSettings,
   );
+  late final VoiceLibraryController _voices = VoiceLibraryController(
+    downloader: widget.voices,
+  );
+  late final TtsEngineFactory _engines =
+      widget.engines ?? const AppTtsEngineFactory();
   late final PlaybackController _playback = PlaybackController(
-    engine: widget.speech ?? SystemTtsEngine(),
+    engine: widget.speech ?? _engines.create(widget.initialSettings.engine),
     fallbackLanguage: widget.initialSettings.fallbackLanguage,
     rate: widget.initialSettings.rate,
   );
@@ -54,12 +65,14 @@ class _DocumentToPodcastAppState extends State<DocumentToPodcastApp> {
   void initState() {
     super.initState();
     _settings.addListener(_applySettings);
+    unawaited(_voices.load());
   }
 
   @override
   void dispose() {
     _settings.removeListener(_applySettings);
     _playback.dispose();
+    _voices.dispose();
     _settings.dispose();
     _controller.dispose();
     super.dispose();
@@ -93,6 +106,7 @@ class _DocumentToPodcastAppState extends State<DocumentToPodcastApp> {
         controller: _controller,
         playback: _playback,
         settings: _settings,
+        voices: _voices,
         surface: _surface,
       ),
     );

@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import 'app/app.dart';
 import 'data/document_store_opener.dart';
+import 'data/model_downloader_opener.dart';
 import 'data/settings_repository_opener.dart';
 
 Future<void> main() async {
@@ -9,11 +10,13 @@ Future<void> main() async {
   final store = await openDocumentStore();
   final settingsRepository = await openSettingsRepository();
   final settings = await settingsRepository.load();
+  final voices = await openModelDownloader();
   runApp(
     DocumentToPodcastApp(
       store: store,
       settingsRepository: settingsRepository,
       initialSettings: settings,
+      voices: voices,
     ),
   );
 }

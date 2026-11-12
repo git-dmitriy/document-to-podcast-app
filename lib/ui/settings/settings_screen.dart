@@ -7,18 +7,22 @@ import '../../app/app_surface.dart';
 import '../../domain/app_language.dart';
 import '../reader/playback_controller.dart';
 import '../reader/playback_speed_slider.dart';
+import 'quality_voices_section.dart';
 import 'settings_controller.dart';
+import 'voice_library_controller.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     required this.settings,
     required this.playback,
+    required this.voices,
     required this.surface,
     super.key,
   });
 
   final SettingsController settings;
   final PlaybackController playback;
+  final VoiceLibraryController voices;
   final AppSurface surface;
 
   @override
@@ -32,7 +36,7 @@ class SettingsScreen extends StatelessWidget {
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: spacing.readingMaxWidth),
             child: ListenableBuilder(
-              listenable: Listenable.merge([settings, playback]),
+              listenable: Listenable.merge([settings, playback, voices]),
               builder: (context, _) {
                 final theme = Theme.of(context);
                 final errorMessage = settings.errorMessage;
@@ -92,6 +96,8 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ),
                     ],
+                    SizedBox(height: spacing.sectionGap),
+                    QualityVoicesSection(voices: voices, surface: surface),
                   ],
                 );
               },

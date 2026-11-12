@@ -11,6 +11,7 @@ import '../reader/playback_controller.dart';
 import '../reader/reader_screen.dart';
 import '../settings/settings_controller.dart';
 import '../settings/settings_screen.dart';
+import '../settings/voice_library_controller.dart';
 import 'delete_document.dart';
 import 'document_list.dart';
 import 'library_controller.dart';
@@ -21,6 +22,7 @@ class LibraryScreen extends StatefulWidget {
     required this.controller,
     required this.playback,
     required this.settings,
+    required this.voices,
     required this.surface,
     super.key,
   });
@@ -33,6 +35,7 @@ class LibraryScreen extends StatefulWidget {
   final LibraryController controller;
   final PlaybackController playback;
   final SettingsController settings;
+  final VoiceLibraryController voices;
   final AppSurface surface;
 
   @override
@@ -126,6 +129,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           builder: (context) => SettingsScreen(
             settings: widget.settings,
             playback: widget.playback,
+            voices: widget.voices,
             surface: widget.surface,
           ),
         ),
