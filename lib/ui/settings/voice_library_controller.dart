@@ -18,6 +18,13 @@ final class VoiceLibraryController extends ChangeNotifier {
 
   bool get isLoading => _loading;
 
+  bool get hasInstalledVoice {
+    for (final voice in voiceCatalog) {
+      if (statusOf(voice.id) == VoiceInstallStatus.installed) return true;
+    }
+    return false;
+  }
+
   VoiceInstallStatus statusOf(VoiceId id) {
     if (_downloading.contains(id)) return VoiceInstallStatus.downloading;
     return _installs[id]?.status ?? VoiceInstallStatus.missing;

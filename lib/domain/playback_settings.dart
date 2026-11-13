@@ -1,6 +1,14 @@
 import 'app_language.dart';
 
-enum SpeechEngine { system, quality }
+enum SpeechEngine {
+  system,
+  quality;
+
+  String get label => switch (this) {
+    SpeechEngine.system => 'System',
+    SpeechEngine.quality => 'Quality',
+  };
+}
 
 final class PlaybackSettings {
   const PlaybackSettings({

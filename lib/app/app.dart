@@ -4,15 +4,18 @@ import 'package:flutter/material.dart';
 
 import '../data/audio_cache.dart';
 import '../data/document_store.dart';
+import '../data/memory_quality_prompt_store.dart';
 import '../data/model_downloader.dart';
 import '../data/playback_position_store.dart';
 import '../data/playback_wake_lock.dart';
+import '../data/quality_prompt_store.dart';
 import '../data/settings_repository.dart';
 import '../data/tts_engine_factory.dart';
 import '../domain/playback_settings.dart';
 import '../domain/tts_engine.dart';
 import '../ui/library/library_controller.dart';
 import '../ui/library/library_screen.dart';
+import '../ui/library/quality_prompt_controller.dart';
 import '../ui/reader/playback_controller.dart';
 import '../ui/settings/settings_controller.dart';
 import '../ui/settings/voice_library_controller.dart';
@@ -26,6 +29,7 @@ class DocumentToPodcastApp extends StatefulWidget {
     required this.settingsRepository,
     required this.initialSettings,
     required this.voices,
+    this.qualityPrompt,
     this.positions,
     this.wakeLock,
     this.audioCache,
@@ -39,6 +43,7 @@ class DocumentToPodcastApp extends StatefulWidget {
   final SettingsRepository settingsRepository;
   final PlaybackSettings initialSettings;
   final ModelDownloader voices;
+  final QualityPromptStore? qualityPrompt;
   final PlaybackPositionStore? positions;
   final PlaybackWakeLock? wakeLock;
   final AudioCache? audioCache;
@@ -60,6 +65,9 @@ class _DocumentToPodcastAppState extends State<DocumentToPodcastApp> {
   );
   late final VoiceLibraryController _voices = VoiceLibraryController(
     downloader: widget.voices,
+  );
+  late final QualityPromptController _qualityPrompt = QualityPromptController(
+    store: widget.qualityPrompt ?? MemoryQualityPromptStore(),
   );
   late final AppSurface _surface = widget.surface ?? currentAppSurface();
   late final TtsEngineFactory _engines =
@@ -87,6 +95,7 @@ class _DocumentToPodcastAppState extends State<DocumentToPodcastApp> {
     super.initState();
     _settings.addListener(_applySettings);
     unawaited(_voices.load());
+    unawaited(_qualityPrompt.load());
   }
 
   @override
@@ -94,6 +103,7 @@ class _DocumentToPodcastAppState extends State<DocumentToPodcastApp> {
     _settings.removeListener(_applySettings);
     _playback.dispose();
     _voices.dispose();
+    _qualityPrompt.dispose();
     _settings.dispose();
     _controller.dispose();
     super.dispose();
@@ -132,6 +142,7 @@ class _DocumentToPodcastAppState extends State<DocumentToPodcastApp> {
         playback: _playback,
         settings: _settings,
         voices: _voices,
+        qualityPrompt: _qualityPrompt,
         surface: _surface,
       ),
     );

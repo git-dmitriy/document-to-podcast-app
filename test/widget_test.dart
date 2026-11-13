@@ -1,25 +1,33 @@
 import 'package:document_to_podcast/app/app.dart';
 import 'package:document_to_podcast/app/app_surface.dart';
+import 'package:document_to_podcast/data/memory_quality_prompt_store.dart';
 import 'package:document_to_podcast/data/memory_settings_repository.dart';
-import 'package:document_to_podcast/domain/app_language.dart';
+import 'package:document_to_podcast/data/quality_prompt_store.dart';
 import 'package:document_to_podcast/data/tts_engine_factory.dart';
+import 'package:document_to_podcast/domain/app_language.dart';
 import 'package:document_to_podcast/domain/playback_settings.dart';
 import 'package:document_to_podcast/domain/tts_engine.dart';
-import 'package:document_to_podcast/ui/settings/settings_screen.dart';
 import 'package:document_to_podcast/domain/voice_package.dart';
 import 'package:document_to_podcast/ui/import/import_screen.dart';
 import 'package:document_to_podcast/ui/library/delete_document.dart';
 import 'package:document_to_podcast/ui/library/library_screen.dart';
+import 'package:document_to_podcast/ui/library/quality_voices_prompt.dart';
 import 'package:document_to_podcast/ui/library/system_speech_banner.dart';
 import 'package:document_to_podcast/ui/settings/quality_voices_section.dart';
+import 'package:document_to_podcast/ui/settings/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'support/fake_tts_engine.dart';
 import 'support/memory_document_store.dart';
 import 'support/memory_model_downloader.dart';
 
 void main() {
+  setUpAll(() {
+    GoogleFonts.config.allowRuntimeFetching = false;
+  });
+
   testWidgets('imports pasted Markdown and opens the reader', (tester) async {
     await _pumpLibrary(tester);
 
@@ -269,9 +277,42 @@ void main() {
     await tester.pump();
 
     expect(engine.spoken, ['First paragraph.', 'Second.']);
+    expect(find.text('System'), findsOneWidget);
+    expect(find.text('English'), findsWidgets);
+    expect(find.bySemanticsLabel(RegExp('Current passage')), findsOneWidget);
     engine.completeCurrent();
     await tester.pumpAndSettle();
     expect(find.byTooltip('Play'), findsOneWidget);
+  });
+
+  testWidgets('offers quality-voice onboarding until dismissed', (
+    tester,
+  ) async {
+    final prompt = MemoryQualityPromptStore();
+    await _pumpLibrary(tester, qualityPrompt: prompt);
+
+    expect(find.text(QualityVoicesPrompt.message), findsOneWidget);
+    await tester.tap(find.byKey(QualityVoicesPrompt.openSettingsKey));
+    await tester.pumpAndSettle();
+    expect(find.text('Quality voices'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(QualityVoicesPrompt.dismissKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text(QualityVoicesPrompt.message), findsNothing);
+    expect(prompt.dismissed, isTrue);
+  });
+
+  testWidgets('hides quality onboarding on the web', (tester) async {
+    await _pumpLibrary(
+      tester,
+      surface: AppSurface.web,
+      qualityPrompt: MemoryQualityPromptStore(),
+    );
+
+    expect(find.text(QualityVoicesPrompt.message), findsNothing);
   });
 }
 
@@ -281,6 +322,7 @@ Future<void> _pumpLibrary(
   FakeTtsEngine? speech,
   MemorySettingsRepository? settingsRepository,
   MemoryModelDownloader? voices,
+  QualityPromptStore? qualityPrompt,
   TtsEngineFactory? engines,
   PlaybackSettings initialSettings = const PlaybackSettings(),
   AppSurface? surface,
@@ -292,6 +334,7 @@ Future<void> _pumpLibrary(
       settingsRepository: settingsRepository ?? MemorySettingsRepository(),
       initialSettings: initialSettings,
       voices: voices ?? MemoryModelDownloader(),
+      qualityPrompt: qualityPrompt ?? MemoryQualityPromptStore(dismissed: true),
       engines: engines,
       surface: surface,
     ),

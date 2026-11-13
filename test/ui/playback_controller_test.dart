@@ -250,6 +250,26 @@ void main() {
     expect(playback.status, PlaybackStatus.idle);
   });
 
+  test('exposes the current segment while speaking', () async {
+    final engine = FakeTtsEngine();
+    final playback = PlaybackController(engine: engine);
+    addTearDown(playback.dispose);
+
+    final pending = playback.play(document('First paragraph.\n\nSecond.'));
+    await pumpEventQueue();
+
+    expect(playback.currentSegment?.text, 'First paragraph.');
+    expect(playback.segments, hasLength(2));
+
+    engine.completeCurrent();
+    await pumpEventQueue();
+    expect(playback.currentSegment?.text, 'Second.');
+
+    engine.completeCurrent();
+    await pending;
+    expect(playback.currentSegment, isNull);
+  });
+
   test('moves to the next and previous paragraph', () async {
     final engine = FakeTtsEngine();
     final playback = PlaybackController(engine: engine);

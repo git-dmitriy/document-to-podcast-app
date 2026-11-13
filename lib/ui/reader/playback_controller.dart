@@ -66,7 +66,16 @@ final class PlaybackController extends ChangeNotifier {
 
   double get rate => _rate;
 
-  int? get segmentIndex => _segments.isEmpty ? null : _index;
+  int? get segmentIndex =>
+      _status == PlaybackStatus.idle || _segments.isEmpty ? null : _index;
+
+  SpeechSegment? get currentSegment {
+    final index = segmentIndex;
+    if (index == null || index < 0 || index >= _segments.length) return null;
+    return _segments[index];
+  }
+
+  List<SpeechSegment> get segments => _segments;
 
   bool get canSkipBackward =>
       _status != PlaybackStatus.idle && _segments.isNotEmpty && _index > 0;
@@ -287,9 +296,9 @@ final class PlaybackController extends ChangeNotifier {
           if (id != null && _index < _segments.length) {
             await _savePosition(id, _index);
           }
-          if (!_isCurrent(generation) || _status != PlaybackStatus.playing) {
-            return;
-          }
+          if (!_isCurrent(generation)) return;
+          _notify();
+          if (_status != PlaybackStatus.playing) return;
         case TtsUtteranceEnd.paused:
           _held = true;
           _status = PlaybackStatus.paused;
