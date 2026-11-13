@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_spacing.dart';
 import '../../app/app_surface.dart';
 import '../../domain/app_language.dart';
+import '../../domain/playback_settings.dart';
 import '../reader/playback_controller.dart';
 import '../reader/playback_speed_slider.dart';
 import 'quality_voices_section.dart';
@@ -25,6 +26,9 @@ class SettingsScreen extends StatelessWidget {
   final VoiceLibraryController voices;
   final AppSurface surface;
 
+  static const systemEngineKey = Key('engine-system');
+  static const qualityEngineKey = Key('engine-quality');
+
   @override
   Widget build(BuildContext context) {
     final spacing = AppSpacing.of(context);
@@ -41,22 +45,54 @@ class SettingsScreen extends StatelessWidget {
                 final theme = Theme.of(context);
                 final errorMessage = settings.errorMessage;
                 final language = settings.settings.fallbackLanguage;
+                final web = surface == AppSurface.web;
+                final engine = web
+                    ? SpeechEngine.system
+                    : settings.settings.engine;
                 return ListView(
                   padding: EdgeInsets.all(spacing.pagePadding),
                   children: [
                     Text('Speech', style: theme.textTheme.titleMedium),
                     SizedBox(height: spacing.sectionGap),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Engine'),
-                      subtitle: Text(
-                        surface == AppSurface.web
-                            ? 'System speech is the only engine in the browser.'
-                            : 'System',
+                    Text('Engine', style: theme.textTheme.titleSmall),
+                    RadioGroup<SpeechEngine>(
+                      groupValue: engine,
+                      onChanged: (value) {
+                        if (value == null || web) return;
+                        unawaited(settings.setEngine(value));
+                      },
+                      child: Column(
+                        children: [
+                          const RadioListTile<SpeechEngine>(
+                            key: SettingsScreen.systemEngineKey,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('System'),
+                            value: SpeechEngine.system,
+                          ),
+                          RadioListTile<SpeechEngine>(
+                            key: SettingsScreen.qualityEngineKey,
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Quality'),
+                            subtitle: Text(
+                              web
+                                  ? 'System speech is the only engine in the browser.'
+                                  : 'Missing voices use system speech.',
+                            ),
+                            value: SpeechEngine.quality,
+                            enabled: !web,
+                          ),
+                        ],
                       ),
                     ),
                     Text('Speed', style: theme.textTheme.titleSmall),
                     PlaybackSpeedSlider(playback: playback, settings: settings),
+                    if (!web && engine == SpeechEngine.quality)
+                      Text(
+                        "Quality speech uses the voice's natural pace.",
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     SizedBox(height: spacing.sectionGap),
                     Text('Default language', style: theme.textTheme.titleSmall),
                     SizedBox(height: spacing.sectionGap / 2),

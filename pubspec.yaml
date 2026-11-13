@@ -17,6 +17,7 @@ dependencies:
   shared_preferences: ^2.5.6
   markdown: ^7.3.1
   flutter_tts: ^4.2.5
+  flutter_piper_tts: ^0.5.2
 
 dev_dependencies:
   flutter_test:

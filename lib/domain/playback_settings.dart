@@ -17,9 +17,13 @@ final class PlaybackSettings {
   final double rate;
   final AppLanguage fallbackLanguage;
 
-  PlaybackSettings copyWith({double? rate, AppLanguage? fallbackLanguage}) {
+  PlaybackSettings copyWith({
+    SpeechEngine? engine,
+    double? rate,
+    AppLanguage? fallbackLanguage,
+  }) {
     return PlaybackSettings(
-      engine: engine,
+      engine: engine ?? this.engine,
       rate: clampPlaybackRate(rate ?? this.rate),
       fallbackLanguage: fallbackLanguage ?? this.fallbackLanguage,
     );

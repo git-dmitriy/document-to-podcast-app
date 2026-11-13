@@ -71,6 +71,13 @@ final voiceCatalog = <VoicePackage>[
   ),
 ];
 
+VoiceId? voiceIdForLanguage(AppLanguage language) {
+  for (final voice in voiceCatalog) {
+    if (voice.language == language) return voice.id;
+  }
+  return null;
+}
+
 VoicePackage voiceById(VoiceId id) {
   for (final voice in voiceCatalog) {
     if (voice.id == id) return voice;

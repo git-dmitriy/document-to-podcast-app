@@ -223,6 +223,30 @@ void main() {
     await second;
     expect(playback.status, PlaybackStatus.idle);
   });
+
+  test('switches engines and stops the current queue', () async {
+    final first = FakeTtsEngine();
+    final second = FakeTtsEngine();
+    final playback = PlaybackController(engine: first);
+    addTearDown(playback.dispose);
+
+    final pending = playback.play(document('Hello.'));
+    await pumpEventQueue();
+    expect(first.spoken, ['Hello.']);
+
+    await playback.useEngine(second);
+    await pending;
+
+    expect(playback.status, PlaybackStatus.idle);
+    expect(first.stopCount, 1);
+
+    final next = playback.play(document('Again.'));
+    await pumpEventQueue();
+    expect(second.spoken, ['Again.']);
+    second.completeCurrent();
+    await next;
+    expect(playback.status, PlaybackStatus.idle);
+  });
 }
 
 extension on Document {

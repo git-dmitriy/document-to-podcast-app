@@ -2,7 +2,10 @@ import 'package:document_to_podcast/app/app.dart';
 import 'package:document_to_podcast/app/app_surface.dart';
 import 'package:document_to_podcast/data/memory_settings_repository.dart';
 import 'package:document_to_podcast/domain/app_language.dart';
+import 'package:document_to_podcast/data/tts_engine_factory.dart';
 import 'package:document_to_podcast/domain/playback_settings.dart';
+import 'package:document_to_podcast/domain/tts_engine.dart';
+import 'package:document_to_podcast/ui/settings/settings_screen.dart';
 import 'package:document_to_podcast/domain/voice_package.dart';
 import 'package:document_to_podcast/ui/import/import_screen.dart';
 import 'package:document_to_podcast/ui/library/delete_document.dart';
@@ -153,6 +156,14 @@ void main() {
       find.text('System speech is the only engine in the browser.'),
       findsOneWidget,
     );
+    expect(
+      tester
+          .widget<RadioListTile<SpeechEngine>>(
+            find.byKey(SettingsScreen.qualityEngineKey),
+          )
+          .enabled,
+      isFalse,
+    );
     await tester.scrollUntilVisible(
       find.text(QualityVoicesSection.webMessage),
       200,
@@ -188,6 +199,55 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('switches playback to the quality engine', (tester) async {
+    final system = FakeTtsEngine();
+    final quality = FakeTtsEngine();
+    final repository = MemorySettingsRepository();
+    final store = MemoryDocumentStore(newId: () => 'doc-1');
+    await store.create(title: 'Hello', markdown: 'Body text');
+    await _pumpLibrary(
+      tester,
+      store: store,
+      settingsRepository: repository,
+      engines: _MappedEngines({
+        SpeechEngine.system: system,
+        SpeechEngine.quality: quality,
+      }),
+    );
+
+    await tester.tap(find.text('Hello'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Play'));
+    await tester.pump();
+    expect(system.spoken, ['Body text']);
+    system.completeCurrent();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(SettingsScreen.qualityEngineKey));
+    await tester.pumpAndSettle();
+    expect(repository.settings.engine, SpeechEngine.quality);
+    expect(
+      find.text("Quality speech uses the voice's natural pace."),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Hello'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Play'));
+    await tester.pump();
+
+    expect(quality.spoken, ['Body text']);
+    expect(system.spoken, ['Body text']);
+    quality.completeCurrent();
+    await tester.pumpAndSettle();
+  });
 }
 
 Future<void> _pumpLibrary(
@@ -196,6 +256,7 @@ Future<void> _pumpLibrary(
   FakeTtsEngine? speech,
   MemorySettingsRepository? settingsRepository,
   MemoryModelDownloader? voices,
+  TtsEngineFactory? engines,
   PlaybackSettings initialSettings = const PlaybackSettings(),
   AppSurface? surface,
 }) async {
@@ -206,8 +267,24 @@ Future<void> _pumpLibrary(
       settingsRepository: settingsRepository ?? MemorySettingsRepository(),
       initialSettings: initialSettings,
       voices: voices ?? MemoryModelDownloader(),
+      engines: engines,
       surface: surface,
     ),
   );
   await tester.pumpAndSettle();
+}
+
+final class _MappedEngines implements TtsEngineFactory {
+  _MappedEngines(this._engines);
+
+  final Map<SpeechEngine, TtsEngine> _engines;
+
+  @override
+  TtsEngine create(SpeechEngine engine) {
+    final created = _engines[engine];
+    if (created == null) {
+      throw StateError('Missing ${engine.name} engine.');
+    }
+    return created;
+  }
 }

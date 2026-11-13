@@ -69,6 +69,9 @@ final class FakeTtsEngine implements TtsEngine {
     _finish(const TtsSpeakResult(TtsUtteranceEnd.cancelled));
   }
 
+  @override
+  Future<void> dispose() async {}
+
   void completeCurrent() {
     _finish(const TtsSpeakResult(TtsUtteranceEnd.completed));
   }

@@ -39,5 +39,11 @@ final class MemoryModelDownloader implements ModelDownloader {
   @override
   Future<void> delete(VoiceId id) async {
     installed.remove(id);
+    models.remove(id);
   }
+
+  final models = <VoiceId, InstalledVoiceModel>{};
+
+  @override
+  Future<InstalledVoiceModel?> installedModel(VoiceId id) async => models[id];
 }

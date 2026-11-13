@@ -25,6 +25,20 @@ void main() {
     expect(controller.errorMessage, isNull);
   });
 
+  test('persists the selected speech engine', () async {
+    final repository = MemorySettingsRepository();
+    final controller = SettingsController(
+      repository: repository,
+      initial: const PlaybackSettings(),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.setEngine(SpeechEngine.quality);
+
+    expect(controller.settings.engine, SpeechEngine.quality);
+    expect(repository.settings.engine, SpeechEngine.quality);
+  });
+
   test('restores the previous settings when saving fails', () async {
     final controller = SettingsController(
       repository: _FailingSettingsRepository(),

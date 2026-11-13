@@ -176,6 +176,17 @@ final class SystemTtsEngine implements TtsEngine {
     _finish(id, TtsUtteranceEnd.cancelled, null);
   }
 
+  @override
+  Future<void> dispose() async {
+    try {
+      await stop();
+    } on TtsFailure {
+      // Stopping a finished utterance still releases the client below.
+    }
+    _client = null;
+    _prepared = false;
+  }
+
   SystemTtsClient _open() =>
       _client ??= _injected ?? platform.createSystemTtsClient();
 

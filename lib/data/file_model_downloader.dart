@@ -7,10 +7,7 @@ import 'voice_download_exception.dart';
 import 'voice_file_source.dart';
 
 final class FileModelDownloader implements ModelDownloader {
-  FileModelDownloader({
-    required this._directory,
-    required this._source,
-  });
+  FileModelDownloader({required this._directory, required this._source});
 
   static const _emitStep = 65536;
 
@@ -85,6 +82,24 @@ final class FileModelDownloader implements ModelDownloader {
     if (await folder.exists()) {
       await folder.delete(recursive: true);
     }
+  }
+
+  @override
+  Future<InstalledVoiceModel?> installedModel(VoiceId id) async {
+    final voice = voiceById(id);
+    String? modelPath;
+    String? configPath;
+    for (final file in voice.files) {
+      final saved = _file(voice, file.name, partial: false);
+      if (!await saved.exists() || await saved.length() == 0) return null;
+      if (file.name.endsWith('.json')) {
+        configPath = saved.path;
+      } else {
+        modelPath = saved.path;
+      }
+    }
+    if (modelPath == null || configPath == null) return null;
+    return InstalledVoiceModel(modelPath: modelPath, configPath: configPath);
   }
 
   int _begin(VoiceId id) {

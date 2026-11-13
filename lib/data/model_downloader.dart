@@ -12,4 +12,17 @@ abstract interface class ModelDownloader {
   void cancel(VoiceId id);
 
   Future<void> delete(VoiceId id);
+
+  /// Absolute paths of a fully installed voice, or null when a file is missing.
+  Future<InstalledVoiceModel?> installedModel(VoiceId id);
+}
+
+final class InstalledVoiceModel {
+  const InstalledVoiceModel({
+    required this.modelPath,
+    required this.configPath,
+  });
+
+  final String modelPath;
+  final String configPath;
 }

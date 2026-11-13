@@ -222,6 +222,25 @@ void main() {
       ),
     );
   });
+
+  test('reports paths only when both voice files are installed', () async {
+    final voice = voiceById(VoiceId.lessac);
+    final downloader = FileModelDownloader(
+      directory: root,
+      source: ScriptedVoiceFileSource((url, fromByte) async {
+        throw StateError('open');
+      }),
+    );
+
+    expect(await downloader.installedModel(voice.id), isNull);
+    await _write(root, voice, const [1]);
+    final model = await downloader.installedModel(voice.id);
+    expect(model?.modelPath, endsWith(voice.files.first.name));
+    expect(model?.configPath, endsWith(voice.files.last.name));
+
+    await _stored(root, voice.files.last, folder: voice.id).delete();
+    expect(await downloader.installedModel(voice.id), isNull);
+  });
 }
 
 VoiceByteStream payload(

@@ -27,6 +27,8 @@ abstract interface class TtsEngine {
   Future<TtsSpeakResult> resume();
 
   Future<void> stop();
+
+  Future<void> dispose();
 }
 
 final class TtsFailure implements Exception {

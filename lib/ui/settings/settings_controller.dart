@@ -37,6 +37,13 @@ final class SettingsController extends ChangeNotifier {
     });
   }
 
+  Future<void> setEngine(SpeechEngine engine) {
+    return _lock.run(() {
+      if (engine == _settings.engine) return Future<void>.value();
+      return _save(_settings.copyWith(engine: engine));
+    });
+  }
+
   Future<void> _save(PlaybackSettings next) async {
     final previous = _settings;
     _settings = next;

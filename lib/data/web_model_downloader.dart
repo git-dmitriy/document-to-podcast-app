@@ -32,4 +32,7 @@ final class WebModelDownloader implements ModelDownloader {
   Future<void> delete(VoiceId id) async {
     throw const VoiceDownloadException(unavailableMessage);
   }
+
+  @override
+  Future<InstalledVoiceModel?> installedModel(VoiceId id) async => null;
 }

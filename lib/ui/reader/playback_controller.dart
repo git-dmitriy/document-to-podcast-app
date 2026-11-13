@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../data/async_lock.dart';
 import '../../domain/app_language.dart';
 import '../../domain/document.dart';
 import '../../domain/language_detector.dart';
@@ -31,7 +32,8 @@ final class PlaybackController extends ChangeNotifier {
   static const maxRate = PlaybackSettings.maxRate;
   static const defaultRate = PlaybackSettings.defaultRate;
 
-  final TtsEngine _engine;
+  final AsyncLock _engineLock = AsyncLock();
+  TtsEngine _engine;
   AppLanguage _fallback;
   MarkdownSpeechCompiler _compiler;
   final Map<AppLanguage, bool> _availability = {};
@@ -160,14 +162,53 @@ final class PlaybackController extends ChangeNotifier {
     }
   }
 
+  Future<void> useEngine(TtsEngine engine) {
+    return _engineLock.run(() async {
+      if (_disposed || identical(engine, _engine)) {
+        if (!identical(engine, _engine)) await engine.dispose();
+        return;
+      }
+      await stop();
+      if (_disposed) {
+        await engine.dispose();
+        return;
+      }
+      final previous = _engine;
+      _engine = engine;
+      _availability.clear();
+      _unavailable.clear();
+      try {
+        await engine.setRate(_rate);
+        await engine.warmup();
+      } on TtsFailure catch (error) {
+        _error = error.message;
+        _notify();
+      }
+      try {
+        await previous.dispose();
+      } catch (error, stackTrace) {
+        _report(error, stackTrace);
+      }
+    });
+  }
+
   @override
   void dispose() {
     final active = _status != PlaybackStatus.idle || _held;
     _disposed = true;
     _generation++;
     _status = PlaybackStatus.idle;
-    if (active) unawaited(_halt());
+    unawaited(_release(active));
     super.dispose();
+  }
+
+  Future<void> _release(bool active) async {
+    if (active) await _halt();
+    try {
+      await _engine.dispose();
+    } catch (error, stackTrace) {
+      _report(error, stackTrace);
+    }
   }
 
   Future<void> _drain(int generation, {bool resumeCurrent = false}) async {

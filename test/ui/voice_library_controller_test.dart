@@ -124,4 +124,7 @@ final class _GateDownloader implements ModelDownloader {
   Future<void> delete(VoiceId id) async {
     installed.remove(id);
   }
+
+  @override
+  Future<InstalledVoiceModel?> installedModel(VoiceId id) async => null;
 }

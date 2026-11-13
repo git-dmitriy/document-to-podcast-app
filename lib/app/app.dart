@@ -52,14 +52,23 @@ class _DocumentToPodcastAppState extends State<DocumentToPodcastApp> {
   late final VoiceLibraryController _voices = VoiceLibraryController(
     downloader: widget.voices,
   );
+  late final AppSurface _surface = widget.surface ?? currentAppSurface();
   late final TtsEngineFactory _engines =
-      widget.engines ?? const AppTtsEngineFactory();
+      widget.engines ?? AppTtsEngineFactory(voices: widget.voices);
+  late SpeechEngine _appliedEngine = _surface == AppSurface.web
+      ? SpeechEngine.system
+      : widget.initialSettings.engine;
   late final PlaybackController _playback = PlaybackController(
-    engine: widget.speech ?? _engines.create(widget.initialSettings.engine),
+    engine:
+        widget.speech ??
+        _engines.create(
+          _surface == AppSurface.web
+              ? SpeechEngine.system
+              : widget.initialSettings.engine,
+        ),
     fallbackLanguage: widget.initialSettings.fallbackLanguage,
     rate: widget.initialSettings.rate,
   );
-  late final AppSurface _surface = widget.surface ?? currentAppSurface();
 
   @override
   void initState() {
@@ -82,6 +91,10 @@ class _DocumentToPodcastAppState extends State<DocumentToPodcastApp> {
     final settings = _settings.settings;
     _playback.setFallbackLanguage(settings.fallbackLanguage);
     unawaited(_playback.setRate(settings.rate));
+    if (widget.speech != null || _surface == AppSurface.web) return;
+    if (settings.engine == _appliedEngine) return;
+    _appliedEngine = settings.engine;
+    unawaited(_playback.useEngine(_engines.create(settings.engine)));
   }
 
   @override
