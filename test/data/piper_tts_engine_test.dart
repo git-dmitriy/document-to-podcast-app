@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'dart:typed_data';
+
+import 'package:document_to_podcast/data/memory_audio_cache.dart';
 import 'package:document_to_podcast/data/model_downloader.dart';
 import 'package:document_to_podcast/data/piper_tts_engine.dart';
 import 'package:document_to_podcast/data/piper_voice.dart';
@@ -11,6 +14,22 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_tts_engine.dart';
 import '../support/memory_model_downloader.dart';
+
+final _wav = Uint8List.fromList([
+  0x52,
+  0x49,
+  0x46,
+  0x46,
+  0,
+  0,
+  0,
+  0,
+  0x57,
+  0x41,
+  0x56,
+  0x45,
+  1,
+]);
 
 void main() {
   test('speaks each sentence with the voice for that language', () async {
@@ -95,6 +114,55 @@ void main() {
     expect(result.message, 'The Irina voice is not installed.');
   });
 
+  test('reuses rendered audio instead of synthesizing it again', () async {
+    final client = _Client()
+      ..canPlayRenderedAudio = true
+      ..rendered = _wav;
+    final cache = MemoryAudioCache();
+    final engine = PiperTtsEngine(
+      voices: _installed(VoiceId.lessac),
+      host: _Host(client),
+      cache: cache,
+    );
+    addTearDown(engine.dispose);
+
+    final first = await engine.speak('One. Two.', language: AppLanguage.en);
+    final renders = client.renderCount;
+    final second = await engine.speak('One. Two.', language: AppLanguage.en);
+
+    expect(first.end, TtsUtteranceEnd.completed);
+    expect(second.end, TtsUtteranceEnd.completed);
+    expect(renders, 2);
+    expect(client.renderCount, renders);
+    expect(client.spoken, isEmpty);
+    expect(client.played, hasLength(4));
+    expect(cache.stored, hasLength(2));
+  });
+
+  test('does not store audio when playback is cancelled', () async {
+    final release = Completer<void>();
+    final client = _Client()
+      ..canPlayRenderedAudio = true
+      ..rendered = _wav
+      ..hold = release;
+    final cache = MemoryAudioCache();
+    final engine = PiperTtsEngine(
+      voices: _installed(VoiceId.lessac),
+      host: _Host(client),
+      cache: cache,
+    );
+    addTearDown(engine.dispose);
+
+    final pending = engine.speak('One.', language: AppLanguage.en);
+    await pumpEventQueue();
+    await engine.stop();
+    release.complete();
+
+    expect((await pending).end, TtsUtteranceEnd.cancelled);
+    expect(cache.stored, isEmpty);
+    expect(client.played, isEmpty);
+  });
+
   test('uses system speech when the quality voice is missing', () async {
     final quality = FakeTtsEngine()..available[AppLanguage.ru] = false;
     final system = FakeTtsEngine();
@@ -146,10 +214,32 @@ final class _Host implements PiperVoiceHost {
 
 final class _Client implements PiperVoiceClient {
   final spoken = <String>[];
+  final played = <Uint8List>[];
   Completer<void>? hold;
   var pauseCount = 0;
   var resumeCount = 0;
   var stopCount = 0;
+  var renderCount = 0;
+
+  @override
+  bool canPlayRenderedAudio = false;
+
+  Uint8List? rendered;
+
+  @override
+  Future<Uint8List?> render(String text) async {
+    renderCount++;
+    final pending = hold;
+    if (pending != null) await pending.future;
+    return rendered;
+  }
+
+  @override
+  Future<void> play(Uint8List audio) async {
+    played.add(Uint8List.fromList(audio));
+    final pending = hold;
+    if (pending != null) await pending.future;
+  }
 
   @override
   Future<void> speak(String text) {

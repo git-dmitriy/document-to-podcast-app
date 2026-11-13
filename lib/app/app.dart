@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../data/audio_cache.dart';
 import '../data/document_store.dart';
 import '../data/model_downloader.dart';
+import '../data/playback_position_store.dart';
+import '../data/playback_wake_lock.dart';
 import '../data/settings_repository.dart';
 import '../data/tts_engine_factory.dart';
 import '../domain/playback_settings.dart';
@@ -23,6 +26,9 @@ class DocumentToPodcastApp extends StatefulWidget {
     required this.settingsRepository,
     required this.initialSettings,
     required this.voices,
+    this.positions,
+    this.wakeLock,
+    this.audioCache,
     this.speech,
     this.engines,
     this.surface,
@@ -33,6 +39,9 @@ class DocumentToPodcastApp extends StatefulWidget {
   final SettingsRepository settingsRepository;
   final PlaybackSettings initialSettings;
   final ModelDownloader voices;
+  final PlaybackPositionStore? positions;
+  final PlaybackWakeLock? wakeLock;
+  final AudioCache? audioCache;
   final TtsEngine? speech;
   final TtsEngineFactory? engines;
   final AppSurface? surface;
@@ -54,7 +63,8 @@ class _DocumentToPodcastAppState extends State<DocumentToPodcastApp> {
   );
   late final AppSurface _surface = widget.surface ?? currentAppSurface();
   late final TtsEngineFactory _engines =
-      widget.engines ?? AppTtsEngineFactory(voices: widget.voices);
+      widget.engines ??
+      AppTtsEngineFactory(voices: widget.voices, cache: widget.audioCache);
   late SpeechEngine _appliedEngine = _surface == AppSurface.web
       ? SpeechEngine.system
       : widget.initialSettings.engine;
@@ -68,6 +78,8 @@ class _DocumentToPodcastAppState extends State<DocumentToPodcastApp> {
         ),
     fallbackLanguage: widget.initialSettings.fallbackLanguage,
     rate: widget.initialSettings.rate,
+    positions: widget.positions,
+    wakeLock: widget.wakeLock,
   );
 
   @override

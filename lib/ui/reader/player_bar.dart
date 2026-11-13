@@ -66,6 +66,20 @@ class PlayerBar extends StatelessWidget {
                             : () => unawaited(_stop()),
                         icon: const Icon(Icons.stop),
                       ),
+                      IconButton(
+                        tooltip: 'Previous paragraph',
+                        onPressed: playback.canSkipBackward
+                            ? () => unawaited(_skip(-1))
+                            : null,
+                        icon: const Icon(Icons.skip_previous),
+                      ),
+                      IconButton(
+                        tooltip: 'Next paragraph',
+                        onPressed: playback.canSkipForward
+                            ? () => unawaited(_skip(1))
+                            : null,
+                        icon: const Icon(Icons.skip_next),
+                      ),
                       Text('Speed', style: theme.textTheme.labelLarge),
                       Expanded(
                         child: PlaybackSpeedSlider(
@@ -93,6 +107,20 @@ class PlayerBar extends StatelessWidget {
           await playback.resume();
         case PlaybackStatus.idle:
           await playback.play(document);
+      }
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(exception: error, stack: stackTrace),
+      );
+    }
+  }
+
+  Future<void> _skip(int delta) async {
+    try {
+      if (delta < 0) {
+        await playback.skipBackward();
+      } else {
+        await playback.skipForward();
       }
     } catch (error, stackTrace) {
       FlutterError.reportError(

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../data/async_lock.dart';
+import '../../data/playback_position_store.dart';
+import '../../data/playback_wake_lock.dart';
 import '../../domain/app_language.dart';
 import '../../domain/document.dart';
 import '../../domain/language_detector.dart';
@@ -20,6 +22,8 @@ final class PlaybackController extends ChangeNotifier {
     MarkdownSpeechCompiler? compiler,
     AppLanguage fallbackLanguage = AppLanguage.en,
     double? rate,
+    this._positions,
+    this._wakeLock,
   }) : _fallback = fallbackLanguage,
        _rate = clampPlaybackRate(rate ?? PlaybackSettings.defaultRate),
        _compiler =
@@ -33,7 +37,11 @@ final class PlaybackController extends ChangeNotifier {
   static const defaultRate = PlaybackSettings.defaultRate;
 
   final AsyncLock _engineLock = AsyncLock();
+  final AsyncLock _wakeGate = AsyncLock();
   TtsEngine _engine;
+  final PlaybackPositionStore? _positions;
+  final PlaybackWakeLock? _wakeLock;
+  final Set<String> _forgotten = {};
   AppLanguage _fallback;
   MarkdownSpeechCompiler _compiler;
   final Map<AppLanguage, bool> _availability = {};
@@ -48,6 +56,7 @@ final class PlaybackController extends ChangeNotifier {
   var _generation = 0;
   var _held = false;
   var _disposed = false;
+  var _wakeHeld = false;
 
   PlaybackStatus get status => _status;
 
@@ -56,6 +65,16 @@ final class PlaybackController extends ChangeNotifier {
   String? get errorMessage => _error;
 
   double get rate => _rate;
+
+  int? get segmentIndex => _segments.isEmpty ? null : _index;
+
+  bool get canSkipBackward =>
+      _status != PlaybackStatus.idle && _segments.isNotEmpty && _index > 0;
+
+  bool get canSkipForward =>
+      _status != PlaybackStatus.idle &&
+      _segments.isNotEmpty &&
+      _index + 1 < _segments.length;
 
   Future<void> play(Document document) async {
     await stop();
@@ -74,13 +93,19 @@ final class PlaybackController extends ChangeNotifier {
       _notify();
       return;
     }
+    _forgotten.remove(document.id);
+    final saved = await _readPosition(document.id);
+    if (!_isCurrent(generation)) return;
+    final start = saved != null && saved < segments.length ? saved : 0;
     _segments = List.unmodifiable(segments);
-    _index = 0;
+    _index = start;
     _documentId = document.id;
     _held = false;
     _status = PlaybackStatus.playing;
     _error = null;
     _notify();
+    await _savePosition(document.id, start);
+    if (!_isCurrent(generation)) return;
     await _drain(generation);
   }
 
@@ -97,6 +122,8 @@ final class PlaybackController extends ChangeNotifier {
       _notify();
       return;
     }
+    final id = _documentId;
+    if (id != null) await _savePosition(id, _index);
     // The queue records a held utterance when the speak future completes.
     await Future<void>.value();
   }
@@ -137,6 +164,15 @@ final class PlaybackController extends ChangeNotifier {
         _notify();
       }
     }
+  }
+
+  Future<void> skipBackward() => _skip(-1);
+
+  Future<void> skipForward() => _skip(1);
+
+  Future<void> forget(String documentId) {
+    _forgotten.add(documentId);
+    return _clearPosition(documentId);
   }
 
   void setFallbackLanguage(AppLanguage language) {
@@ -203,6 +239,7 @@ final class PlaybackController extends ChangeNotifier {
   }
 
   Future<void> _release(bool active) async {
+    await _syncWake();
     if (active) await _halt();
     try {
       await _engine.dispose();
@@ -246,6 +283,13 @@ final class PlaybackController extends ChangeNotifier {
       switch (result.end) {
         case TtsUtteranceEnd.completed:
           _index++;
+          final id = _documentId;
+          if (id != null && _index < _segments.length) {
+            await _savePosition(id, _index);
+          }
+          if (!_isCurrent(generation) || _status != PlaybackStatus.playing) {
+            return;
+          }
         case TtsUtteranceEnd.paused:
           _held = true;
           _status = PlaybackStatus.paused;
@@ -268,12 +312,14 @@ final class PlaybackController extends ChangeNotifier {
       }
     }
     if (!_isCurrent(generation)) return;
+    final id = _documentId;
     _status = PlaybackStatus.idle;
     _held = false;
     _index = 0;
     _segments = const [];
     _documentId = null;
     _notify();
+    if (id != null) await _savePosition(id, 0);
   }
 
   Future<bool?> _languageAvailable(int generation, AppLanguage language) async {
@@ -319,8 +365,96 @@ final class PlaybackController extends ChangeNotifier {
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 
+  Future<void> _skip(int delta) async {
+    if (_disposed || _status == PlaybackStatus.idle || _segments.isEmpty) {
+      return;
+    }
+    final next = _index + delta;
+    if (next < 0 || next >= _segments.length) return;
+    final generation = ++_generation;
+    final id = _documentId;
+    final paused = _status == PlaybackStatus.paused;
+    _index = next;
+    _held = false;
+    _error = null;
+    if (id != null) await _savePosition(id, next);
+    if (!_isCurrent(generation)) return;
+    if (paused) {
+      _notify();
+      return;
+    }
+    _status = PlaybackStatus.playing;
+    _notify();
+    try {
+      await _engine.stop();
+    } on TtsFailure catch (error) {
+      _fail(generation, error.message);
+      return;
+    } catch (error, stackTrace) {
+      _report(error, stackTrace);
+      _fail(generation, 'Playback failed.');
+      return;
+    }
+    if (!_isCurrent(generation) || _status != PlaybackStatus.playing) return;
+    await _drain(generation);
+  }
+
+  Future<int?> _readPosition(String id) async {
+    final store = _positions;
+    if (store == null || _forgotten.contains(id)) return null;
+    try {
+      return await store.read(id);
+    } catch (error, stackTrace) {
+      _report(error, stackTrace);
+      return null;
+    }
+  }
+
+  Future<void> _savePosition(String id, int index) async {
+    final store = _positions;
+    if (store == null || index < 0 || _forgotten.contains(id)) return;
+    try {
+      await store.save(id, index);
+    } catch (error, stackTrace) {
+      _report(error, stackTrace);
+      return;
+    }
+    if (_forgotten.contains(id)) await _clearPosition(id);
+  }
+
+  Future<void> _clearPosition(String id) async {
+    final store = _positions;
+    if (store == null) return;
+    try {
+      await store.clear(id);
+    } catch (error, stackTrace) {
+      _report(error, stackTrace);
+    }
+  }
+
+  Future<void> _syncWake() {
+    final lock = _wakeLock;
+    if (lock == null) return Future<void>.value();
+    final enabled = !_disposed && _status == PlaybackStatus.playing;
+    return _wakeGate.run(() async {
+      if (_wakeHeld == enabled) return;
+      try {
+        if (enabled) {
+          await lock.enable();
+        } else {
+          await lock.disable();
+        }
+        _wakeHeld = enabled;
+      } catch (error, stackTrace) {
+        _report(error, stackTrace);
+      }
+    });
+  }
+
   void _notify() {
-    if (!_disposed) notifyListeners();
+    if (_disposed) return;
+    unawaited(_syncWake());
+    notifyListeners();
   }
 
   void _report(Object error, StackTrace stackTrace) {

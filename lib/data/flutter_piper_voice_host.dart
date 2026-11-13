@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_piper_tts/flutter_piper_tts.dart';
 
 import 'piper_voice.dart';
@@ -21,6 +23,15 @@ final class _FlutterPiperVoice implements PiperVoiceClient {
 
   final PiperTTS _voice;
   var _disposed = false;
+
+  @override
+  bool get canPlayRenderedAudio => false;
+
+  @override
+  Future<Uint8List?> render(String text) async => null;
+
+  @override
+  Future<void> play(Uint8List audio) async {}
 
   @override
   Future<void> speak(String text) {

@@ -1,3 +1,4 @@
+import 'package:document_to_podcast/data/memory_audio_cache.dart';
 import 'package:document_to_podcast/data/quality_speech_web.dart';
 import 'package:document_to_podcast/data/routing_tts_engine.dart';
 import 'package:document_to_podcast/data/system_tts_engine.dart';
@@ -26,7 +27,10 @@ void main() {
   );
 
   test('browsers keep quality speech on the system engine', () {
-    final engine = createQualityEngine(MemoryModelDownloader());
+    final engine = createQualityEngine(
+      MemoryModelDownloader(),
+      MemoryAudioCache(),
+    );
 
     expect(engine, isA<SystemTtsEngine>());
   });

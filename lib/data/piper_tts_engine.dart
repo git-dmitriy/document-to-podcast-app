@@ -1,17 +1,23 @@
 import 'dart:async';
 
+import 'dart:typed_data';
+
 import '../domain/app_language.dart';
+import '../domain/audio_cache_key.dart';
+import '../domain/playback_settings.dart';
 import '../domain/speech_chunks.dart';
 import '../domain/tts_engine.dart';
 import '../domain/voice_package.dart';
+import 'audio_cache.dart';
 import 'model_downloader.dart';
 import 'piper_voice.dart';
 
 final class PiperTtsEngine implements TtsEngine {
-  PiperTtsEngine({required this._voices, required this._host});
+  PiperTtsEngine({required this._voices, required this._host, this._cache});
 
   final ModelDownloader _voices;
   final PiperVoiceHost _host;
+  final AudioCache? _cache;
   final Map<VoiceId, PiperVoiceClient> _clients = {};
 
   PiperVoiceClient? _active;
@@ -19,8 +25,11 @@ final class PiperTtsEngine implements TtsEngine {
   Future<void>? _chunkPlayback;
   Completer<void>? _resumeCancel;
   List<String> _chunks = const [];
+  AppLanguage? _utteranceLanguage;
+  var _rate = PlaybackSettings.defaultRate;
   var _chunkIndex = 0;
   var _generation = 0;
+  var _chunkStarted = false;
   var _disposed = false;
 
   @override
@@ -48,7 +57,8 @@ final class PiperTtsEngine implements TtsEngine {
 
   @override
   Future<void> setRate(double rate) async {
-    // flutter_piper_tts does not expose a speech rate.
+    if (rate.isNaN) return;
+    _rate = clampPlaybackRate(rate);
   }
 
   @override
@@ -71,6 +81,7 @@ final class PiperTtsEngine implements TtsEngine {
       );
     }
     _active = client;
+    _utteranceLanguage = language;
     _chunks = chunks;
     _chunkIndex = 0;
     return _speakQueued(client, _generation);
@@ -126,7 +137,7 @@ final class PiperTtsEngine implements TtsEngine {
         message: 'Could not speak this section.',
       );
     }
-    _chunkIndex++;
+    if (_chunkStarted) _chunkIndex++;
     _chunkPlayback = null;
     return _speakQueued(client, generation);
   }
@@ -181,7 +192,13 @@ final class PiperTtsEngine implements TtsEngine {
       }
       final interrupt = Completer<TtsUtteranceEnd>();
       _interrupt = interrupt;
-      final playback = client.speak(_chunks[_chunkIndex]);
+      _chunkStarted = false;
+      final playback = _startChunk(
+        client,
+        _chunks[_chunkIndex],
+        generation,
+        interrupt,
+      );
       _chunkPlayback = playback;
       unawaited(_watchChunk(playback, interrupt, generation));
       final end = await interrupt.future;
@@ -202,6 +219,73 @@ final class PiperTtsEngine implements TtsEngine {
     }
     _chunks = const [];
     return const TtsSpeakResult(TtsUtteranceEnd.completed);
+  }
+
+  Future<void> _startChunk(
+    PiperVoiceClient client,
+    String chunk,
+    int generation,
+    Completer<TtsUtteranceEnd> interrupt,
+  ) {
+    if (!client.canPlayRenderedAudio || _cache == null) {
+      _chunkStarted = true;
+      return client.speak(chunk);
+    }
+    return _playCached(client, chunk, generation, interrupt);
+  }
+
+  Future<void> _playCached(
+    PiperVoiceClient client,
+    String chunk,
+    int generation,
+    Completer<TtsUtteranceEnd> interrupt,
+  ) async {
+    final language = _utteranceLanguage;
+    final voice = language == null ? null : voiceIdForLanguage(language);
+    if (voice == null) {
+      _chunkStarted = true;
+      await client.speak(chunk);
+      return;
+    }
+    final key = AudioCacheKey(
+      text: chunk,
+      voice: voice.name,
+      rate: _rate,
+      engine: SpeechEngine.quality.name,
+    );
+    final cache = _cache;
+    Uint8List? audio;
+    if (cache != null) {
+      try {
+        audio = await cache.read(key);
+      } on AudioCacheException {
+        audio = null;
+      }
+    }
+    if (_shouldAbandon(generation, interrupt)) return;
+    if (audio == null || audio.isEmpty) {
+      audio = await client.render(chunk);
+      if (_shouldAbandon(generation, interrupt)) return;
+      if (audio == null || audio.isEmpty) {
+        _chunkStarted = true;
+        await client.speak(chunk);
+        return;
+      }
+      if (cache != null) {
+        try {
+          await cache.write(key, audio);
+        } on AudioCacheException {
+          // Playback can continue with the samples just rendered.
+        }
+      }
+      if (_shouldAbandon(generation, interrupt)) return;
+    }
+    _chunkStarted = true;
+    await client.play(audio);
+  }
+
+  bool _shouldAbandon(int generation, Completer<TtsUtteranceEnd> interrupt) {
+    return _disposed || generation != _generation || interrupt.isCompleted;
   }
 
   Future<void> _watchChunk(

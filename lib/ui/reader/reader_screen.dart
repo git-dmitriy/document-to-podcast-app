@@ -203,6 +203,7 @@ class _PlaybackHostState extends State<_PlaybackHost> {
 
   void _onLibrary() {
     if (widget.controller.state.documentById(widget.documentId) == null) {
+      unawaited(widget.playback.forget(widget.documentId));
       _stopDocument(widget.documentId);
     }
   }

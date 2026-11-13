@@ -1,4 +1,13 @@
+import 'dart:typed_data';
+
 abstract interface class PiperVoiceClient {
+  /// True when [render] returns audio that [play] can speak.
+  bool get canPlayRenderedAudio;
+
+  Future<Uint8List?> render(String text);
+
+  Future<void> play(Uint8List audio);
+
   Future<void> speak(String text);
 
   Future<void> pause();

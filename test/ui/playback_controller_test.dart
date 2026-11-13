@@ -1,3 +1,4 @@
+import 'package:document_to_podcast/data/playback_wake_lock.dart';
 import 'package:document_to_podcast/domain/app_language.dart';
 import 'package:document_to_podcast/domain/document.dart';
 import 'package:document_to_podcast/domain/tts_engine.dart';
@@ -5,6 +6,7 @@ import 'package:document_to_podcast/ui/reader/playback_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_tts_engine.dart';
+import '../support/memory_playback_position_store.dart';
 
 void main() {
   Document document(String markdown) {
@@ -247,6 +249,114 @@ void main() {
     await next;
     expect(playback.status, PlaybackStatus.idle);
   });
+
+  test('moves to the next and previous paragraph', () async {
+    final engine = FakeTtsEngine();
+    final playback = PlaybackController(engine: engine);
+    addTearDown(playback.dispose);
+
+    final pending = playback.play(document('First paragraph.\n\nSecond.'));
+    await pumpEventQueue();
+    expect(playback.canSkipBackward, isFalse);
+    expect(playback.canSkipForward, isTrue);
+
+    final forward = playback.skipForward();
+    await pumpEventQueue();
+    expect(engine.spoken, ['First paragraph.', 'Second.']);
+    expect(engine.stopCount, 1);
+    expect(playback.segmentIndex, 1);
+
+    final backward = playback.skipBackward();
+    await pumpEventQueue();
+    expect(engine.spoken, ['First paragraph.', 'Second.', 'First paragraph.']);
+    expect(playback.canSkipBackward, isFalse);
+
+    engine.completeCurrent();
+    await pumpEventQueue();
+    engine.completeCurrent();
+    await forward;
+    await backward;
+    await pending;
+  });
+
+  test(
+    'resumes a saved paragraph and restarts after the document ends',
+    () async {
+      final engine = FakeTtsEngine();
+      final positions = MemoryPlaybackPositionStore();
+      final playback = PlaybackController(engine: engine, positions: positions);
+      addTearDown(playback.dispose);
+
+      final first = playback.play(document('First paragraph.\n\nSecond.'));
+      await pumpEventQueue();
+      expect(positions.positions['doc-1'], 0);
+      engine.completeCurrent();
+      await pumpEventQueue();
+      expect(positions.positions['doc-1'], 1);
+
+      await playback.stop();
+      await first;
+
+      final resumed = playback.play(document('First paragraph.\n\nSecond.'));
+      await pumpEventQueue();
+      expect(engine.spoken.last, 'Second.');
+      engine.completeCurrent();
+      await resumed;
+      expect(positions.positions['doc-1'], 0);
+
+      final again = playback.play(document('First paragraph.\n\nSecond.'));
+      await pumpEventQueue();
+      expect(engine.spoken.last, 'First paragraph.');
+      engine.completeCurrent();
+      await pumpEventQueue();
+      engine.completeCurrent();
+      await again;
+    },
+  );
+
+  test('keeps the screen awake only while speech is playing', () async {
+    final engine = FakeTtsEngine();
+    final wake = _WakeLock();
+    final playback = PlaybackController(engine: engine, wakeLock: wake);
+    addTearDown(playback.dispose);
+
+    final pending = playback.play(document('Hello.'));
+    await pumpEventQueue();
+    expect(wake.enabled, isTrue);
+
+    await playback.pause();
+    await pumpEventQueue();
+    expect(wake.enabled, isFalse);
+
+    final resumed = playback.resume();
+    await pumpEventQueue();
+    expect(wake.enabled, isTrue);
+    engine.completeCurrent();
+    await resumed;
+    await pending;
+    await pumpEventQueue();
+    expect(wake.enabled, isFalse);
+  });
+
+  test('forgets a saved position when the document is removed', () async {
+    final engine = FakeTtsEngine();
+    final positions = MemoryPlaybackPositionStore();
+    final playback = PlaybackController(engine: engine, positions: positions);
+    addTearDown(playback.dispose);
+
+    final pending = playback.play(document('First paragraph.\n\nSecond.'));
+    await pumpEventQueue();
+    expect(positions.positions['doc-1'], 0);
+
+    await playback.forget('doc-1');
+    expect(positions.positions.containsKey('doc-1'), isFalse);
+
+    engine.completeCurrent();
+    await pumpEventQueue();
+    expect(positions.positions.containsKey('doc-1'), isFalse);
+    await playback.stop();
+    await pending;
+  });
 }
 
 extension on Document {
@@ -257,5 +367,19 @@ extension on Document {
       markdown: markdown,
       updatedAt: updatedAt,
     );
+  }
+}
+
+final class _WakeLock implements PlaybackWakeLock {
+  var enabled = false;
+
+  @override
+  Future<void> enable() async {
+    enabled = true;
+  }
+
+  @override
+  Future<void> disable() async {
+    enabled = false;
   }
 }

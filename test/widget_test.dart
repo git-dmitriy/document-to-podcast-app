@@ -248,6 +248,31 @@ void main() {
     quality.completeCurrent();
     await tester.pumpAndSettle();
   });
+
+  testWidgets('skips to the next paragraph', (tester) async {
+    final engine = FakeTtsEngine();
+    final store = MemoryDocumentStore(newId: () => 'doc-1');
+    await store.create(title: 'Hello', markdown: 'First paragraph.\n\nSecond.');
+    await _pumpLibrary(tester, store: store, speech: engine);
+
+    await tester.tap(find.text('Hello'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Play'));
+    await tester.pump();
+    expect(engine.spoken, ['First paragraph.']);
+    expect(
+      tester.widget<IconButton>(find.byTooltip('Previous paragraph')).onPressed,
+      isNull,
+    );
+
+    await tester.tap(find.byTooltip('Next paragraph'));
+    await tester.pump();
+
+    expect(engine.spoken, ['First paragraph.', 'Second.']);
+    engine.completeCurrent();
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Play'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpLibrary(
