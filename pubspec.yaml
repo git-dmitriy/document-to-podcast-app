@@ -27,5 +27,11 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
 
+# Local patch of dart_piper_tts: skip Android ABIs without ort prebuilts so
+# plain `flutter build apk --release` works. Drop when upstream ships the fix.
+dependency_overrides:
+  dart_piper_tts:
+    path: third_party/dart_piper_tts
+
 flutter:
   uses-material-design: true

@@ -4,6 +4,9 @@ import 'package:flutter_piper_tts/flutter_piper_tts.dart';
 
 import 'piper_voice.dart';
 
+const qualityPhonemizerStrategy =
+    PhonemizerStrategy.dictionaryWithNeuralFallback;
+
 final class FlutterPiperVoiceHost implements PiperVoiceHost {
   @override
   Future<PiperVoiceClient> open({
@@ -38,7 +41,7 @@ final class _FlutterPiperVoice implements PiperVoiceClient {
     return _voice.speak(
       text,
       waitForCompletion: true,
-      phonemizerStrategy: PhonemizerStrategy.neuralWord,
+      phonemizerStrategy: qualityPhonemizerStrategy,
     );
   }
 

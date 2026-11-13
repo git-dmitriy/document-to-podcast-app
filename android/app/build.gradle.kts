@@ -27,6 +27,12 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Piper/ort only provides Android arm64 prebuilts; keep the APK arm64-only.
+        // Unsupported ABI hooks are skipped in third_party/dart_piper_tts.
+        ndk {
+            abiFilters.clear()
+            abiFilters.addAll(listOf("arm64-v8a"))
+        }
     }
 
     buildTypes {

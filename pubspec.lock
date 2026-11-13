@@ -98,12 +98,11 @@ packages:
     source: hosted
     version: "1.0.9"
   dart_piper_tts:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: dart_piper_tts
-      sha256: a212607f13ba93736433304a280e748b8de2a67d0763af6ce66fb5d3fe095f1d
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/dart_piper_tts"
+      relative: true
+    source: path
     version: "0.2.6"
   dbus:
     dependency: transitive
