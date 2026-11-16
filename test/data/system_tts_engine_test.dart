@@ -77,6 +77,47 @@ void main() {
     client.complete();
     await pending;
   });
+
+  test('forwards spoken ranges through onProgress', () async {
+    final client = FakeSystemTtsClient();
+    final engine = SystemTtsEngine(client: client);
+    final events = <TtsUtteranceProgress>[];
+
+    final pending = engine.speak(
+      'Hello world',
+      language: AppLanguage.en,
+      onProgress: events.add,
+    );
+    await pumpEventQueue();
+    client.emitProgress('Hello world', 0, 5, 'Hello');
+    client.emitProgress('Hello world', 6, 11, 'world');
+    client.complete();
+    await pending;
+
+    expect(events, [
+      const TtsUtteranceProgress(start: 0, end: 5),
+      const TtsUtteranceProgress(start: 6, end: 11),
+    ]);
+  });
+
+  test('shifts progress by leading trim', () async {
+    final client = FakeSystemTtsClient();
+    final engine = SystemTtsEngine(client: client);
+    final events = <TtsUtteranceProgress>[];
+
+    final pending = engine.speak(
+      '  Hi',
+      language: AppLanguage.en,
+      onProgress: events.add,
+    );
+    await pumpEventQueue();
+    expect(client.spoken, ['Hi']);
+    client.emitProgress('Hi', 0, 2, 'Hi');
+    client.complete();
+    await pending;
+
+    expect(events, [const TtsUtteranceProgress(start: 2, end: 4)]);
+  });
 }
 
 final class FakeSystemTtsClient implements SystemTtsClient {
@@ -89,6 +130,7 @@ final class FakeSystemTtsClient implements SystemTtsClient {
   var prepared = false;
   var stopCount = 0;
   void Function()? onComplete;
+  void Function(String text, int start, int end, String word)? onProgress;
 
   @override
   Future<void> prepare() async {
@@ -103,6 +145,13 @@ final class FakeSystemTtsClient implements SystemTtsClient {
     required void Function(Object? message) onError,
   }) {
     this.onComplete = onComplete;
+  }
+
+  @override
+  void bindProgress(
+    void Function(String text, int start, int end, String word)? onProgress,
+  ) {
+    this.onProgress = onProgress;
   }
 
   @override
@@ -134,4 +183,8 @@ final class FakeSystemTtsClient implements SystemTtsClient {
   }
 
   void complete() => onComplete?.call();
+
+  void emitProgress(String text, int start, int end, String word) {
+    onProgress?.call(text, start, end, word);
+  }
 }

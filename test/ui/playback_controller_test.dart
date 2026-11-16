@@ -168,6 +168,33 @@ void main() {
     expect(playback.errorMessage, 'Nothing to read in this document.');
   });
 
+  test('updates utterance highlight without leaving the segment', () async {
+    final engine = FakeTtsEngine();
+    final playback = PlaybackController(engine: engine);
+    addTearDown(playback.dispose);
+
+    final pending = playback.play(document('Hello world'));
+    await pumpEventQueue();
+    expect(playback.utteranceHighlight.value, isNull);
+
+    engine.emitProgress(const TtsUtteranceProgress(start: 0, end: 5));
+    expect(
+      playback.utteranceHighlight.value,
+      const TtsUtteranceProgress(start: 0, end: 5),
+    );
+    expect(playback.segmentIndex, 0);
+
+    engine.emitProgress(const TtsUtteranceProgress(start: 6, end: 11));
+    expect(
+      playback.utteranceHighlight.value,
+      const TtsUtteranceProgress(start: 6, end: 11),
+    );
+
+    engine.completeCurrent();
+    await pending;
+    expect(playback.utteranceHighlight.value, isNull);
+  });
+
   test('applies the selected rate before speaking', () async {
     final engine = FakeTtsEngine();
     final playback = PlaybackController(engine: engine);

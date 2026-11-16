@@ -38,6 +38,17 @@ final class IoSystemTtsClient implements SystemTtsClient {
   }
 
   @override
+  void bindProgress(
+    void Function(String text, int start, int end, String word)? onProgress,
+  ) {
+    if (onProgress == null) {
+      _tts.setProgressHandler((text, start, end, word) {});
+      return;
+    }
+    _tts.setProgressHandler(onProgress);
+  }
+
+  @override
   Future<Object?> isLanguageAvailable(String language) {
     return _value(_tts.isLanguageAvailable(language));
   }

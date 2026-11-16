@@ -8,6 +8,7 @@ final class FakeTtsEngine implements TtsEngine {
   final List<AppLanguage> languages = [];
   final List<double> rates = [];
   final List<String> resumed = [];
+  final List<TtsUtteranceProgress> progressEvents = [];
   final available = <AppLanguage, bool>{
     AppLanguage.en: true,
     AppLanguage.ru: true,
@@ -16,6 +17,7 @@ final class FakeTtsEngine implements TtsEngine {
   Completer<TtsSpeakResult>? pending;
   String? lastText;
   AppLanguage? lastLanguage;
+  TtsProgressHandler? activeProgress;
   var pauseCount = 0;
   var stopCount = 0;
   TtsFailure? availabilityFailure;
@@ -39,11 +41,16 @@ final class FakeTtsEngine implements TtsEngine {
   }
 
   @override
-  Future<TtsSpeakResult> speak(String text, {required AppLanguage language}) {
+  Future<TtsSpeakResult> speak(
+    String text, {
+    required AppLanguage language,
+    TtsProgressHandler? onProgress,
+  }) {
     lastText = text;
     lastLanguage = language;
     spoken.add(text);
     languages.add(language);
+    activeProgress = onProgress;
     return _wait();
   }
 
@@ -54,11 +61,12 @@ final class FakeTtsEngine implements TtsEngine {
   }
 
   @override
-  Future<TtsSpeakResult> resume() {
+  Future<TtsSpeakResult> resume({TtsProgressHandler? onProgress}) {
     final text = lastText;
     if (text == null) {
       return Future.value(const TtsSpeakResult(TtsUtteranceEnd.cancelled));
     }
+    if (onProgress != null) activeProgress = onProgress;
     resumed.add(text);
     return _wait();
   }
@@ -66,6 +74,7 @@ final class FakeTtsEngine implements TtsEngine {
   @override
   Future<void> stop() async {
     stopCount++;
+    activeProgress = null;
     _finish(const TtsSpeakResult(TtsUtteranceEnd.cancelled));
   }
 
@@ -73,7 +82,13 @@ final class FakeTtsEngine implements TtsEngine {
   Future<void> dispose() async {}
 
   void completeCurrent() {
+    activeProgress = null;
     _finish(const TtsSpeakResult(TtsUtteranceEnd.completed));
+  }
+
+  void emitProgress(TtsUtteranceProgress progress) {
+    progressEvents.add(progress);
+    activeProgress?.call(progress);
   }
 
   Future<TtsSpeakResult> _wait() {

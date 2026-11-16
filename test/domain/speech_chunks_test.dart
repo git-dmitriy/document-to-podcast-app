@@ -15,4 +15,13 @@ void main() {
     expect(chunks.every((chunk) => chunk.length <= 40), isTrue);
     expect(chunks.join(' '), text);
   });
+
+  test('keeps character ranges for each chunk', () {
+    const text = 'Hello. World!';
+    final spans = splitSpeechChunkSpans(text);
+
+    expect(spans.map((span) => span.text), ['Hello.', 'World!']);
+    expect(text.substring(spans[0].start, spans[0].end), 'Hello.');
+    expect(text.substring(spans[1].start, spans[1].end), 'World!');
+  });
 }

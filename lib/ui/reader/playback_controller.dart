@@ -58,6 +58,11 @@ final class PlaybackController extends ChangeNotifier {
   var _disposed = false;
   var _wakeHeld = false;
 
+  /// High-frequency spoken range inside [currentSegment]. Listeners of this
+  /// notifier must not rebuild the whole document body.
+  final ValueNotifier<TtsUtteranceProgress?> utteranceHighlight =
+      ValueNotifier<TtsUtteranceProgress?>(null);
+
   PlaybackStatus get status => _status;
 
   String? get documentId => _documentId;
@@ -128,6 +133,7 @@ final class PlaybackController extends ChangeNotifier {
       _error = error.message;
       _status = PlaybackStatus.idle;
       _held = false;
+      _clearHighlight();
       _notify();
       return;
     }
@@ -157,6 +163,7 @@ final class PlaybackController extends ChangeNotifier {
     _segments = const [];
     _documentId = null;
     _error = null;
+    _clearHighlight();
     _notify();
     if (!active) return;
     try {
@@ -243,6 +250,8 @@ final class PlaybackController extends ChangeNotifier {
     _disposed = true;
     _generation++;
     _status = PlaybackStatus.idle;
+    _clearHighlight();
+    utteranceHighlight.dispose();
     unawaited(_release(active));
     super.dispose();
   }
@@ -278,11 +287,17 @@ final class PlaybackController extends ChangeNotifier {
         return;
       }
       if (!_isCurrent(generation) || _status != PlaybackStatus.playing) return;
+      _clearHighlight();
+      final onProgress = _progressHandler(generation, segment.text);
       final TtsSpeakResult result;
       try {
         result = resume
-            ? await _engine.resume()
-            : await _engine.speak(segment.text, language: segment.language);
+            ? await _engine.resume(onProgress: onProgress)
+            : await _engine.speak(
+                segment.text,
+                language: segment.language,
+                onProgress: onProgress,
+              );
       } on TtsFailure catch (error) {
         _fail(generation, error.message);
         return;
@@ -292,6 +307,7 @@ final class PlaybackController extends ChangeNotifier {
       switch (result.end) {
         case TtsUtteranceEnd.completed:
           _index++;
+          _clearHighlight();
           final id = _documentId;
           if (id != null && _index < _segments.length) {
             await _savePosition(id, _index);
@@ -311,12 +327,14 @@ final class PlaybackController extends ChangeNotifier {
             _index = 0;
             _segments = const [];
             _documentId = null;
+            _clearHighlight();
             _notify();
           }
           return;
         case TtsUtteranceEnd.failed:
           _error ??= result.message ?? 'Could not speak this section.';
           _index++;
+          _clearHighlight();
           _notify();
       }
     }
@@ -327,8 +345,21 @@ final class PlaybackController extends ChangeNotifier {
     _index = 0;
     _segments = const [];
     _documentId = null;
+    _clearHighlight();
     _notify();
     if (id != null) await _savePosition(id, 0);
+  }
+
+  TtsProgressHandler _progressHandler(int generation, String text) {
+    return (progress) {
+      if (!_isCurrent(generation) || _disposed) return;
+      final start = progress.start.clamp(0, text.length);
+      final end = progress.end.clamp(start, text.length);
+      if (end <= start) return;
+      final next = TtsUtteranceProgress(start: start, end: end);
+      if (utteranceHighlight.value == next) return;
+      utteranceHighlight.value = next;
+    };
   }
 
   Future<bool?> _languageAvailable(int generation, AppLanguage language) async {
@@ -360,6 +391,7 @@ final class PlaybackController extends ChangeNotifier {
     _index = 0;
     _segments = const [];
     _documentId = null;
+    _clearHighlight();
     _notify();
     unawaited(_halt());
   }
@@ -386,6 +418,7 @@ final class PlaybackController extends ChangeNotifier {
     _index = next;
     _held = false;
     _error = null;
+    _clearHighlight();
     if (id != null) await _savePosition(id, next);
     if (!_isCurrent(generation)) return;
     if (paused) {
@@ -464,6 +497,12 @@ final class PlaybackController extends ChangeNotifier {
     if (_disposed) return;
     unawaited(_syncWake());
     notifyListeners();
+  }
+
+  void _clearHighlight() {
+    if (utteranceHighlight.value != null) {
+      utteranceHighlight.value = null;
+    }
   }
 
   void _report(Object error, StackTrace stackTrace) {

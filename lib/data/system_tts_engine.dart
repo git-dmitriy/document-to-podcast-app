@@ -21,6 +21,8 @@ final class SystemTtsEngine implements TtsEngine {
   double _rate = 0.5;
   String? _text;
   AppLanguage? _language;
+  var _spokenLead = 0;
+  TtsProgressHandler? _onProgress;
 
   @override
   Future<void> warmup() async {
@@ -78,6 +80,7 @@ final class SystemTtsEngine implements TtsEngine {
   Future<TtsSpeakResult> speak(
     String text, {
     required AppLanguage language,
+    TtsProgressHandler? onProgress,
   }) async {
     final spoken = text.trim();
     if (spoken.isEmpty) {
@@ -91,6 +94,9 @@ final class SystemTtsEngine implements TtsEngine {
     _pendingId = id;
     _text = spoken;
     _language = language;
+    _spokenLead = text.length - text.trimLeft().length;
+    _onProgress = onProgress;
+    client.bindProgress(_forwardProgress);
     client.bindUtterance(
       onComplete: () => _finish(id, TtsUtteranceEnd.completed, null),
       onPause: () => _finish(id, TtsUtteranceEnd.paused, null),
@@ -145,13 +151,13 @@ final class SystemTtsEngine implements TtsEngine {
   }
 
   @override
-  Future<TtsSpeakResult> resume() {
+  Future<TtsSpeakResult> resume({TtsProgressHandler? onProgress}) {
     final text = _text;
     final language = _language;
     if (text == null || language == null) {
       return Future.value(const TtsSpeakResult(TtsUtteranceEnd.cancelled));
     }
-    return speak(text, language: language);
+    return speak(text, language: language, onProgress: onProgress);
   }
 
   @override
@@ -160,6 +166,7 @@ final class SystemTtsEngine implements TtsEngine {
     final id = _pendingId;
     _text = null;
     _language = null;
+    _onProgress = null;
     if (client == null) {
       _finish(id, TtsUtteranceEnd.cancelled, null);
       return;
@@ -183,6 +190,7 @@ final class SystemTtsEngine implements TtsEngine {
     } on TtsFailure {
       // Stopping a finished utterance still releases the client below.
     }
+    _client?.bindProgress(null);
     _client = null;
     _prepared = false;
   }
@@ -190,10 +198,23 @@ final class SystemTtsEngine implements TtsEngine {
   SystemTtsClient _open() =>
       _client ??= _injected ?? platform.createSystemTtsClient();
 
+  void _forwardProgress(String text, int start, int end, String word) {
+    final handler = _onProgress;
+    if (handler == null) return;
+    final lead = _spokenLead;
+    final shiftedStart = start + lead;
+    final shiftedEnd = end + lead;
+    if (shiftedStart < 0 || shiftedEnd <= shiftedStart) return;
+    handler(TtsUtteranceProgress(start: shiftedStart, end: shiftedEnd));
+  }
+
   void _finish(int? id, TtsUtteranceEnd end, String? message) {
     if (id == null || _pendingId != id) return;
     final pending = _pending;
     if (pending == null || pending.isCompleted) return;
+    if (end != TtsUtteranceEnd.paused) {
+      _onProgress = null;
+    }
     pending.complete(TtsSpeakResult(end, message: message));
   }
 }

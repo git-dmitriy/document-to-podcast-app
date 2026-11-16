@@ -24,8 +24,9 @@ final class PiperTtsEngine implements TtsEngine {
   Completer<TtsUtteranceEnd>? _interrupt;
   Future<void>? _chunkPlayback;
   Completer<void>? _resumeCancel;
-  List<String> _chunks = const [];
+  List<SpeechChunkSpan> _chunks = const [];
   AppLanguage? _utteranceLanguage;
+  TtsProgressHandler? _onProgress;
   var _rate = PlaybackSettings.defaultRate;
   var _chunkIndex = 0;
   var _generation = 0;
@@ -65,10 +66,11 @@ final class PiperTtsEngine implements TtsEngine {
   Future<TtsSpeakResult> speak(
     String text, {
     required AppLanguage language,
+    TtsProgressHandler? onProgress,
   }) async {
     await _cancelActive();
     if (_disposed) return const TtsSpeakResult(TtsUtteranceEnd.cancelled);
-    final chunks = splitSpeechChunks(text);
+    final chunks = splitSpeechChunkSpans(text);
     if (chunks.isEmpty) return const TtsSpeakResult(TtsUtteranceEnd.completed);
     final client = await _clientFor(language);
     if (_disposed) return const TtsSpeakResult(TtsUtteranceEnd.cancelled);
@@ -82,6 +84,7 @@ final class PiperTtsEngine implements TtsEngine {
     }
     _active = client;
     _utteranceLanguage = language;
+    _onProgress = onProgress;
     _chunks = chunks;
     _chunkIndex = 0;
     return _speakQueued(client, _generation);
@@ -106,13 +109,15 @@ final class PiperTtsEngine implements TtsEngine {
   }
 
   @override
-  Future<TtsSpeakResult> resume() async {
+  Future<TtsSpeakResult> resume({TtsProgressHandler? onProgress}) async {
     final client = _active;
     final playback = _chunkPlayback;
     if (client == null || playback == null || _disposed) {
       return const TtsSpeakResult(TtsUtteranceEnd.cancelled);
     }
+    if (onProgress != null) _onProgress = onProgress;
     final generation = _generation;
+    _emitChunkProgress();
     try {
       await client.resume();
     } catch (error, stackTrace) {
@@ -193,9 +198,10 @@ final class PiperTtsEngine implements TtsEngine {
       final interrupt = Completer<TtsUtteranceEnd>();
       _interrupt = interrupt;
       _chunkStarted = false;
+      _emitChunkProgress();
       final playback = _startChunk(
         client,
-        _chunks[_chunkIndex],
+        _chunks[_chunkIndex].text,
         generation,
         interrupt,
       );
@@ -218,7 +224,16 @@ final class PiperTtsEngine implements TtsEngine {
       _chunkPlayback = null;
     }
     _chunks = const [];
+    _onProgress = null;
     return const TtsSpeakResult(TtsUtteranceEnd.completed);
+  }
+
+  void _emitChunkProgress() {
+    final handler = _onProgress;
+    if (handler == null) return;
+    if (_chunkIndex < 0 || _chunkIndex >= _chunks.length) return;
+    final span = _chunks[_chunkIndex];
+    handler(TtsUtteranceProgress(start: span.start, end: span.end));
   }
 
   Future<void> _startChunk(
@@ -330,6 +345,7 @@ final class PiperTtsEngine implements TtsEngine {
     if (cancel != null && !cancel.isCompleted) cancel.complete();
     final active = _active;
     _chunkPlayback = null;
+    _onProgress = null;
     if (active == null) return;
     try {
       await active.stop();

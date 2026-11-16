@@ -56,6 +56,33 @@ void main() {
     expect(host.paths, ['en.onnx', 'ru.onnx']);
   });
 
+  test('reports chunk ranges while speaking', () async {
+    final release = Completer<void>();
+    final client = _Client()..hold = release;
+    final engine = PiperTtsEngine(
+      voices: _installed(VoiceId.lessac),
+      host: _Host(client),
+    );
+    addTearDown(engine.dispose);
+    final events = <TtsUtteranceProgress>[];
+
+    final pending = engine.speak(
+      'One. Two.',
+      language: AppLanguage.en,
+      onProgress: events.add,
+    );
+    await pumpEventQueue();
+    expect(events, [const TtsUtteranceProgress(start: 0, end: 4)]);
+
+    client.hold = null;
+    release.complete();
+    expect((await pending).end, TtsUtteranceEnd.completed);
+    expect(events, [
+      const TtsUtteranceProgress(start: 0, end: 4),
+      const TtsUtteranceProgress(start: 5, end: 9),
+    ]);
+  });
+
   test('pauses the current chunk and resumes the rest', () async {
     final release = Completer<void>();
     final client = _Client()..hold = release;

@@ -1,8 +1,33 @@
 const maxSpeechChunkLength = 240;
 
+/// A speakable piece and its character range inside the source [text].
+final class SpeechChunkSpan {
+  const SpeechChunkSpan({
+    required this.text,
+    required this.start,
+    required this.end,
+  });
+
+  final String text;
+  final int start;
+  final int end;
+}
+
 /// Splits narration into short pieces so a long passage can be paused between
 /// sentences instead of being synthesized as one block.
 List<String> splitSpeechChunks(
+  String text, {
+  int maxLength = maxSpeechChunkLength,
+}) {
+  return [
+    for (final span in splitSpeechChunkSpans(text, maxLength: maxLength))
+      span.text,
+  ];
+}
+
+/// Like [splitSpeechChunks], but keeps ranges into the whitespace-normalized
+/// form of [text] (the same string the chunks are taken from).
+List<SpeechChunkSpan> splitSpeechChunkSpans(
   String text, {
   int maxLength = maxSpeechChunkLength,
 }) {
@@ -25,7 +50,19 @@ List<String> splitSpeechChunks(
   }
   final tail = buffer.toString().trim();
   if (tail.isNotEmpty) sentences.add(tail);
-  return [for (final sentence in sentences) ..._fit(sentence, limit)];
+
+  final spans = <SpeechChunkSpan>[];
+  var cursor = 0;
+  for (final sentence in sentences) {
+    for (final piece in _fit(sentence, limit)) {
+      final start = normalized.indexOf(piece, cursor);
+      if (start < 0) continue;
+      final end = start + piece.length;
+      spans.add(SpeechChunkSpan(text: piece, start: start, end: end));
+      cursor = end;
+    }
+  }
+  return spans;
 }
 
 const _sentenceEnders = {'.', '!', '?', '…'};

@@ -7,6 +7,7 @@ use crate::{
     error::TTSError,
     phonemizer::{
         cmudict::CmudictPhonemizer, epitran::EpitranPhonemizer, neural::NeuralPhonemizer,
+        russian::RussianPhonemizer,
     },
 };
 
@@ -30,6 +31,14 @@ impl Phonemizer {
             unaccent(text)
         };
         let tokens = Phonemizer::tokenize(&prepared);
+
+        let lang_key = lang_prefix(lang);
+
+        if lang_key == "ru" {
+            return Ok(phonemize_russian_tokens(&tokens));
+        }
+
+        let lang_key = lang_key.as_str();
 
         match strategy {
             PhonemizationStrategy::NeuralSentence => {
@@ -97,18 +106,19 @@ impl Phonemizer {
                         TextToken::Word(word) => {
                             if matches!(strategy, PhonemizationStrategy::NeuralWord) {
                                 result.push(NeuralPhonemizer::phonemize(lang, &word, None, None)?);
-                            } else if lang.to_lowercase()[..2] == *"en"
+                            } else if lang_key == "en"
                                 && let Some(lookup) = CmudictPhonemizer::lookup(&word)
                             {
                                 result.push(lookup);
-                            } else if lang.to_lowercase()[..2] != *"en"
+                            } else if lang_key != "en"
                                 && let Some(lookup) = EpitranPhonemizer::lookup(lang, &word)
                             {
                                 result.push(lookup);
                             } else if matches!(
                                 strategy,
                                 PhonemizationStrategy::DictionaryWithNeuralFallback
-                            ) {
+                            ) && neural_supports(lang_key)
+                            {
                                 result.push(NeuralPhonemizer::phonemize(lang, &word, None, None)?);
                             } else {
                                 result.push("".to_string());
@@ -202,4 +212,32 @@ enum TextToken {
 
 fn is_cyrillic(c: char) -> bool {
     matches!(c, '\u{0400}'..='\u{04FF}' | '\u{0500}'..='\u{052F}')
+}
+
+fn lang_prefix(lang: &str) -> String {
+    lang.chars()
+        .take(2)
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn neural_supports(lang_key: &str) -> bool {
+    matches!(
+        lang_key,
+        "ca" | "cy" | "da" | "de" | "en" | "es" | "et" | "eu" | "fa" | "fr"
+            | "ga" | "hr" | "hu" | "id" | "is" | "it" | "ja" | "ko" | "nb"
+            | "nl" | "no" | "pl" | "pt" | "qu" | "ro" | "sr" | "sv" | "tr"
+            | "zh" | "yu"
+    )
+}
+
+fn phonemize_russian_tokens(tokens: &[TextToken]) -> String {
+    let mut result = String::new();
+    for token in tokens {
+        match token {
+            TextToken::Word(word) => result.push_str(&RussianPhonemizer::phonemize(word)),
+            TextToken::Symbol(symbol) => result.push_str(symbol),
+        }
+    }
+    result
 }

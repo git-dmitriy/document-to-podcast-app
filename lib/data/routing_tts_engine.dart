@@ -31,11 +31,12 @@ final class RoutingTtsEngine implements TtsEngine {
   Future<TtsSpeakResult> speak(
     String text, {
     required AppLanguage language,
+    TtsProgressHandler? onProgress,
   }) async {
     final qualityReady = await _quality.isAvailable(language);
     final engine = qualityReady ? _quality : _system;
     _active = engine;
-    return engine.speak(text, language: language);
+    return engine.speak(text, language: language, onProgress: onProgress);
   }
 
   @override
@@ -46,12 +47,12 @@ final class RoutingTtsEngine implements TtsEngine {
   }
 
   @override
-  Future<TtsSpeakResult> resume() {
+  Future<TtsSpeakResult> resume({TtsProgressHandler? onProgress}) {
     final active = _active;
     if (active == null) {
       return Future.value(const TtsSpeakResult(TtsUtteranceEnd.cancelled));
     }
-    return active.resume();
+    return active.resume(onProgress: onProgress);
   }
 
   @override
