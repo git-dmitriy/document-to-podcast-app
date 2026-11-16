@@ -19,7 +19,7 @@ void main() {
       '{"version":1,"engine":"quality","rate":2,"language":"ru"}',
     );
 
-    expect(settings.engine, SpeechEngine.system);
+    expect(settings.engine, SpeechEngine.quality);
     expect(settings.rate, PlaybackSettings.maxRate);
     expect(settings.fallbackLanguage, AppLanguage.ru);
   });
@@ -31,5 +31,13 @@ void main() {
     );
 
     expect(decodePlaybackSettings(encodePlaybackSettings(settings)), settings);
+  });
+
+  test('falls back to system speech for an unknown engine', () {
+    final settings = decodePlaybackSettings(
+      '{"version":1,"engine":"cloud","rate":0.5,"language":"en"}',
+    );
+
+    expect(settings.engine, SpeechEngine.system);
   });
 }

@@ -11,17 +11,32 @@ void main() {
     final repository = MemorySettingsRepository();
     final controller = SettingsController(
       repository: repository,
-      initial: const PlaybackSettings(),
+      initial: const PlaybackSettings(engine: SpeechEngine.quality),
     );
     addTearDown(controller.dispose);
 
     await controller.setRate(0.1);
     await controller.setFallbackLanguage(AppLanguage.ru);
 
+    expect(controller.settings.engine, SpeechEngine.quality);
     expect(controller.settings.rate, PlaybackSettings.minRate);
     expect(controller.settings.fallbackLanguage, AppLanguage.ru);
     expect(repository.settings, controller.settings);
     expect(controller.errorMessage, isNull);
+  });
+
+  test('persists the selected speech engine', () async {
+    final repository = MemorySettingsRepository();
+    final controller = SettingsController(
+      repository: repository,
+      initial: const PlaybackSettings(),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.setEngine(SpeechEngine.quality);
+
+    expect(controller.settings.engine, SpeechEngine.quality);
+    expect(repository.settings.engine, SpeechEngine.quality);
   });
 
   test('restores the previous settings when saving fails', () async {

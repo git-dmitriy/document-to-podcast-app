@@ -11,9 +11,12 @@ import '../reader/playback_controller.dart';
 import '../reader/reader_screen.dart';
 import '../settings/settings_controller.dart';
 import '../settings/settings_screen.dart';
+import '../settings/voice_library_controller.dart';
 import 'delete_document.dart';
 import 'document_list.dart';
 import 'library_controller.dart';
+import 'quality_prompt_controller.dart';
+import 'quality_voices_prompt.dart';
 import 'system_speech_banner.dart';
 
 class LibraryScreen extends StatefulWidget {
@@ -21,6 +24,8 @@ class LibraryScreen extends StatefulWidget {
     required this.controller,
     required this.playback,
     required this.settings,
+    required this.voices,
+    required this.qualityPrompt,
     required this.surface,
     super.key,
   });
@@ -33,6 +38,8 @@ class LibraryScreen extends StatefulWidget {
   final LibraryController controller;
   final PlaybackController playback;
   final SettingsController settings;
+  final VoiceLibraryController voices;
+  final QualityPromptController qualityPrompt;
   final AppSurface surface;
 
   @override
@@ -70,6 +77,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (widget.surface == AppSurface.web) const SystemSpeechBanner(),
+            ListenableBuilder(
+              listenable: Listenable.merge([
+                widget.voices,
+                widget.qualityPrompt,
+              ]),
+              builder: (context, _) {
+                if (!_showQualityPrompt) return const SizedBox.shrink();
+                return QualityVoicesPrompt(
+                  prompt: widget.qualityPrompt,
+                  onOpenSettings: _openSettings,
+                );
+              },
+            ),
             Expanded(
               child: ListenableBuilder(
                 listenable: widget.controller,
@@ -105,6 +125,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
+  bool get _showQualityPrompt {
+    if (widget.surface == AppSurface.web) return false;
+    if (widget.voices.isLoading || widget.qualityPrompt.isLoading) {
+      return false;
+    }
+    if (widget.qualityPrompt.isDismissed) return false;
+    return !widget.voices.hasInstalledVoice;
+  }
+
   Widget _detail(LibraryState state) {
     final selectedId = state.selectedId;
     final document = selectedId == null ? null : state.documentById(selectedId);
@@ -126,6 +155,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           builder: (context) => SettingsScreen(
             settings: widget.settings,
             playback: widget.playback,
+            voices: widget.voices,
             surface: widget.surface,
           ),
         ),

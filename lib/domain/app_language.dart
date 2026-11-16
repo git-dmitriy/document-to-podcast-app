@@ -7,6 +7,11 @@ enum AppLanguage {
     AppLanguage.en => 'en-US',
   };
 
+  String get label => switch (this) {
+    AppLanguage.ru => 'Russian',
+    AppLanguage.en => 'English',
+  };
+
   static AppLanguage? byCode(String code) {
     for (final language in AppLanguage.values) {
       if (language.name == code) return language;

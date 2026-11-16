@@ -11,6 +11,7 @@ final class WebSystemTtsClient implements SystemTtsClient {
   void Function()? _onPause;
   void Function()? _onCancel;
   void Function(Object? message)? _onError;
+  void Function(String text, int start, int end, String word)? _onProgress;
   var _prepared = false;
 
   @override
@@ -32,6 +33,13 @@ final class WebSystemTtsClient implements SystemTtsClient {
     _onPause = onPause;
     _onCancel = onCancel;
     _onError = onError;
+  }
+
+  @override
+  void bindProgress(
+    void Function(String text, int start, int end, String word)? onProgress,
+  ) {
+    _onProgress = onProgress;
   }
 
   @override
@@ -77,6 +85,14 @@ final class WebSystemTtsClient implements SystemTtsClient {
       case 'speak.onError':
         final arguments = call.arguments;
         _onError?.call(arguments is Object ? arguments : null);
+      case 'speak.onProgress':
+        final handler = _onProgress;
+        final arguments = call.arguments;
+        if (handler == null || arguments is! Map) return;
+        final start = int.tryParse('${arguments['start']}');
+        final end = int.tryParse('${arguments['end']}');
+        if (start == null || end == null) return;
+        handler('${arguments['text']}', start, end, '${arguments['word']}');
       default:
         break;
     }

@@ -10,6 +10,7 @@ import '../library/library_controller.dart';
 import '../settings/settings_controller.dart';
 import 'playback_controller.dart';
 import 'player_bar.dart';
+import 'segment_reader.dart';
 
 class ReaderScreen extends StatelessWidget {
   const ReaderScreen({
@@ -53,7 +54,7 @@ class ReaderScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  body: ReaderBody(document: document),
+                  body: ReaderBody(document: document, playback: playback),
                   bottomNavigationBar: PlayerBar(
                     playback: playback,
                     settings: settings,
@@ -125,7 +126,9 @@ class ReaderPane extends StatelessWidget {
               ],
             ),
           ),
-          Expanded(child: ReaderBody(document: document)),
+          Expanded(
+            child: ReaderBody(document: document, playback: playback),
+          ),
           PlayerBar(playback: playback, settings: settings, document: document),
         ],
       ),
@@ -134,7 +137,31 @@ class ReaderPane extends StatelessWidget {
 }
 
 class ReaderBody extends StatelessWidget {
-  const ReaderBody({required this.document, super.key});
+  const ReaderBody({required this.document, required this.playback, super.key});
+
+  final Document document;
+  final PlaybackController playback;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: playback,
+      builder: (context, _) {
+        final narrating =
+            playback.status != PlaybackStatus.idle &&
+            playback.documentId == document.id &&
+            playback.segments.isNotEmpty;
+        if (narrating) {
+          return SegmentReader(playback: playback, segments: playback.segments);
+        }
+        return _MarkdownReader(document: document);
+      },
+    );
+  }
+}
+
+class _MarkdownReader extends StatelessWidget {
+  const _MarkdownReader({required this.document});
 
   final Document document;
 
@@ -150,7 +177,12 @@ class ReaderBody extends StatelessWidget {
           data: document.markdown,
           selectable: true,
           padding: EdgeInsets.all(spacing.pagePadding),
-          styleSheet: MarkdownStyleSheet.fromTheme(theme),
+          styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+            p: theme.textTheme.bodyLarge,
+            h1: theme.textTheme.headlineMedium,
+            h2: theme.textTheme.headlineSmall,
+            h3: theme.textTheme.titleLarge,
+          ),
           imageBuilder: _offlineImage,
         ),
       ),
@@ -203,6 +235,7 @@ class _PlaybackHostState extends State<_PlaybackHost> {
 
   void _onLibrary() {
     if (widget.controller.state.documentById(widget.documentId) == null) {
+      unawaited(widget.playback.forget(widget.documentId));
       _stopDocument(widget.documentId);
     }
   }
